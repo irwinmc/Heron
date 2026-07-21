@@ -1,5 +1,6 @@
 import { EventDispatcher } from '../events/EventDispatcher.js';
 import { Event } from '../events/Event.js';
+import { HTTPStatusEvent } from '../events/HTTPStatusEvent.js';
 import { IOErrorEvent } from '../events/IOErrorEvent.js';
 import { ProgressEvent } from '../events/ProgressEvent.js';
 import { HttpMethod } from './HttpMethod.js';
@@ -22,6 +23,15 @@ export class HttpRequest extends EventDispatcher {
 		return this._xhr?.response;
 	}
 
+	/**
+	 * The HTTP status code of the most recent response, or 0 if no request has
+	 * completed yet (or the request was blocked before reaching the server,
+	 * e.g. by CORS).
+	 */
+	public get status(): number {
+		return this._xhr?.status ?? 0;
+	}
+
 	// ── Public methods ────────────────────────────────────────────────────────
 
 	public open(url: string, method: HttpMethod = HttpMethod.GET): void {
@@ -39,7 +49,17 @@ export class HttpRequest extends EventDispatcher {
 		if (this.timeout > 0) xhr.timeout = this.timeout;
 
 		xhr.onload = () => {
-			this.dispatchEventWith(Event.COMPLETE);
+			// `load` only means the request completed — the server may still have
+			// responded with an error status (404, 500, ...), or the browser may
+			// have blocked the response before it reached the server (status 0,
+			// e.g. a failed CORS preflight). Treat both as failures, matching
+			// how fetch()-based code typically checks `response.ok`.
+			HTTPStatusEvent.dispatchHTTPStatusEvent(this, xhr.status);
+			if (xhr.status === 0 || xhr.status >= 400) {
+				IOErrorEvent.dispatchIOErrorEvent(this);
+			} else {
+				this.dispatchEventWith(Event.COMPLETE);
+			}
 		};
 		xhr.onerror = () => {
 			IOErrorEvent.dispatchIOErrorEvent(this);
