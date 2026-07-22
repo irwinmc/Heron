@@ -79,6 +79,10 @@ export class Sound extends EventDispatcher {
 	private _audio?: HTMLAudioElement;
 	private _url = '';
 	private _loaded = false;
+	// Bumped on every load()/close() call. Async callbacks (xhr.onload, decodeAudioData,
+	// canplaythrough) capture the generation at start time and no-op if it's stale by the
+	// time they fire, so a cancelled load can't resurrect state after close().
+	private _generation = 0;
 
 	// ── Getters ───────────────────────────────────────────────────────────────
 
@@ -93,12 +97,13 @@ export class Sound extends EventDispatcher {
 	public load(url: string): void {
 		this._url = url;
 		this._loaded = false;
+		const generation = ++this._generation;
 
 		const ctx = getAudioContext();
 		if (ctx) {
-			this.loadWebAudio(ctx, url);
+			this.loadWebAudio(ctx, url, generation);
 		} else {
-			this.loadHtmlAudio(url);
+			this.loadHtmlAudio(url, generation);
 		}
 	}
 
@@ -117,6 +122,7 @@ export class Sound extends EventDispatcher {
 	}
 
 	public close(): void {
+		this._generation++; // invalidate any in-flight load's async callbacks
 		this._audioBuffer = undefined;
 		if (this._audio) {
 			this._audio.src = '';
@@ -127,12 +133,13 @@ export class Sound extends EventDispatcher {
 
 	// ── Private methods ───────────────────────────────────────────────────────
 
-	private loadWebAudio(ctx: AudioContext, url: string): void {
+	private loadWebAudio(ctx: AudioContext, url: string, generation: number): void {
 		const xhr = new XMLHttpRequest();
 		xhr.open('GET', url, true);
 		xhr.responseType = 'arraybuffer';
 
 		xhr.onload = () => {
+			if (generation !== this._generation) return;
 			if (xhr.status >= 400) {
 				IOErrorEvent.dispatchIOErrorEvent(this);
 				return;
@@ -140,31 +147,35 @@ export class Sound extends EventDispatcher {
 			enqueueDecodeTask({
 				buffer: xhr.response as ArrayBuffer,
 				onSuccess: buffer => {
+					if (generation !== this._generation) return;
 					this._audioBuffer = buffer;
 					this._loaded = true;
 					this.dispatchEventWith(Event.COMPLETE);
 				},
 				onError: () => {
+					if (generation !== this._generation) return;
 					// Decode failed — fall back to HTMLAudioElement
-					this.loadHtmlAudio(url);
+					this.loadHtmlAudio(url, generation);
 				},
 			});
 		};
 
 		xhr.onerror = () => {
+			if (generation !== this._generation) return;
 			IOErrorEvent.dispatchIOErrorEvent(this);
 		};
 
 		xhr.send();
 	}
 
-	private loadHtmlAudio(url: string): void {
+	private loadHtmlAudio(url: string, generation: number): void {
 		const audio = new Audio();
 		this._audio = audio;
 
 		audio.addEventListener(
 			'canplaythrough',
 			() => {
+				if (generation !== this._generation) return;
 				this._loaded = true;
 				this.dispatchEventWith(Event.COMPLETE);
 			},
@@ -174,6 +185,7 @@ export class Sound extends EventDispatcher {
 		audio.addEventListener(
 			'error',
 			() => {
+				if (generation !== this._generation) return;
 				IOErrorEvent.dispatchIOErrorEvent(this);
 			},
 			{ once: true },

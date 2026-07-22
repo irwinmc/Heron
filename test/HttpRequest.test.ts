@@ -150,4 +150,21 @@ describe('HttpRequest', () => {
 
 		expect(req.status).toBe(200);
 	});
+
+	it('applies headers queued after open and discards headers from a replaced request', () => {
+		const req = new HttpRequest();
+
+		req.open('https://example.com/stale');
+		req.setRequestHeader('X-Stale', 'discard-me');
+		req.open('https://example.com/current');
+		req.setRequestHeader('Authorization', 'Bearer token');
+		req.setRequestHeader('X-Trace-Id', 'trace-123');
+		req.send();
+
+		expect(fakeXhr.open).toHaveBeenCalledWith('GET', 'https://example.com/current', true);
+		expect(fakeXhr.setRequestHeader).toHaveBeenNthCalledWith(1, 'Authorization', 'Bearer token');
+		expect(fakeXhr.setRequestHeader).toHaveBeenNthCalledWith(2, 'X-Trace-Id', 'trace-123');
+		expect(fakeXhr.setRequestHeader).toHaveBeenCalledTimes(2);
+		expect(fakeXhr.send).toHaveBeenCalledWith(undefined);
+	});
 });
