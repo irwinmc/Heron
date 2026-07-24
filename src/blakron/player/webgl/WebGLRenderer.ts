@@ -126,7 +126,10 @@ export class WebGLRenderer {
 
 	// ── Public entry point ────────────────────────────────────────────────────
 
-	// Release pooled instructions back to their respective pipes before a rebuild.
+	/**
+	 * Release pooled instructions (filter/mask push/pop) back to their
+	 * respective pipes before a rebuild discards `set`'s current contents.
+	 */
 	private _releaseInstructions(set: InstructionSet): void {
 		for (let i = 0; i < set.instructionSize; i++) {
 			const inst = set.instructions[i];
@@ -147,6 +150,11 @@ export class WebGLRenderer {
 		}
 	}
 
+	/**
+	 * Render `displayObject` into `buffer` and return the number of draw calls
+	 * issued. Rebuilds the instruction set when the scene structure is dirty,
+	 * otherwise patches dirty renderables in place, then executes.
+	 */
 	public render(displayObject: DisplayObject, buffer: WebGLRenderBuffer, matrix: Matrix): number {
 		this._nestLevel++;
 		const ctx = buffer.context;
@@ -194,10 +202,6 @@ export class WebGLRenderer {
 
 	// ── Phase A: build ────────────────────────────────────────────────────────
 
-	/**
-	 * Recursively traverse the DisplayObject tree and append instructions to `set`.
-	 * Captures the current transform/alpha/tint state into each instruction.
-	 */
 	/**
 	 * Recursively build render instructions for the display subtree rooted at
 	 * `displayObject`, appending leaf/effect/group instructions into `set`.
@@ -289,7 +293,11 @@ export class WebGLRenderer {
 		}
 	}
 
-	// Emit a leaf instruction for a single DisplayObject (no $children).
+	/**
+	 * Emit a leaf instruction (bitmap/mesh/shape/text/particle) for a single
+	 * DisplayObject, based on its `$renderObjectType`. No-op for object types
+	 * that don't map to a render pipe (e.g. plain containers).
+	 */
 	private _buildLeaf(
 		obj: DisplayObject,
 		set: InstructionSet,
@@ -363,6 +371,12 @@ export class WebGLRenderer {
 		}
 	}
 
+	/**
+	 * Wrap `obj`'s subtree with filter push/pop instructions. Skips the
+	 * wrapper entirely (falls through to a plain build) if `obj` has no
+	 * filters, since an empty push/pop pair would still incur an offscreen
+	 * buffer allocation for nothing.
+	 */
 	private _buildFilter(
 		obj: DisplayObject,
 		set: InstructionSet,
@@ -384,6 +398,9 @@ export class WebGLRenderer {
 		set.add(FilterPipe.makePop(obj, push as FilterPushInstruction));
 	}
 
+	/**
+	 * Wrap `obj`'s subtree with mask push/pop instructions (`obj.$mask`).
+	 */
 	private _buildClip(
 		obj: DisplayObject,
 		set: InstructionSet,
@@ -398,6 +415,11 @@ export class WebGLRenderer {
 		set.add(MaskPipe.makePop(obj, push as MaskPushInstruction));
 	}
 
+	/**
+	 * Wrap `obj`'s subtree with a mask push/pop pair driven by its
+	 * `$scrollRect`/`$maskRect`, using the mask pipe's scrollRect path
+	 * (`isScrollRect`) rather than a full clip mask.
+	 */
 	private _buildScrollRect(
 		obj: DisplayObject,
 		set: InstructionSet,
@@ -465,7 +487,10 @@ export class WebGLRenderer {
 		} as RenderGroupInstruction);
 	}
 
-	// Build a synthetic instruction for a cacheAsBitmap object.
+	/**
+	 * Build a `displayListCache` instruction for a `cacheAsBitmap` object.
+	 * Returns `undefined` if the object has no `$displayList` cache.
+	 */
 	private _makeCacheInstruction(
 		obj: DisplayObject,
 		offsetX: number,
@@ -605,6 +630,11 @@ export class WebGLRenderer {
 
 	// ── Phase B: execute ──────────────────────────────────────────────────────
 
+	/**
+	 * Walk `set` and dispatch each instruction to its render pipe. No
+	 * scene-graph traversal happens here — `renderGroup` instructions recurse
+	 * into their own nested `InstructionSet` via this same method.
+	 */
 	private _executeInstructions(set: InstructionSet, buffer: WebGLRenderBuffer): void {
 		// Stack for offscreen buffers opened by filter/mask push instructions.
 		const offscreenStack: (WebGLRenderBuffer | undefined)[] = [];
@@ -735,7 +765,10 @@ export class WebGLRenderer {
 		}
 	}
 
-	// Restore the buffer's global matrix / alpha / tint from a snapshot.
+	/**
+	 * Restore `buffer`'s global matrix/alpha/tint from a snapshot, adjusting
+	 * for the buffer's offscreen origin if it's a filter/mask offscreen target.
+	 */
 	private _applyTransform(buffer: WebGLRenderBuffer, t: TransformState): void {
 		const m = buffer.globalMatrix;
 		m.a = t.a;
@@ -765,7 +798,11 @@ export class WebGLRenderer {
 		buf.offscreenOriginY = worldBY - padY;
 	}
 
-	// Execute a cacheAsBitmap DisplayList instruction.
+	/**
+	 * Execute a `displayListCache` instruction: refresh the cached bitmap if
+	 * dirty (re-rendering `obj`'s subtree via the canvas renderer into an
+	 * offscreen surface), then draw that cached bitmap into `buffer`.
+	 */
 	private _executeDisplayListCache(
 		obj: DisplayObject,
 		buffer: WebGLRenderBuffer,
@@ -819,7 +856,12 @@ export class WebGLRenderer {
 		return this._directDraw(obj, buffer, offsetX, offsetY);
 	}
 
-	// Direct draw (used for offscreen mask/filter buffers).
+	/**
+	 * Draw `obj` and its subtree directly into `buffer`, bypassing the
+	 * InstructionSet. Used for offscreen mask/filter buffers, which are
+	 * rendered on demand rather than through the main build/execute pass.
+	 * Returns the number of draw calls issued.
+	 */
 	private _directDraw(obj: DisplayObject, buffer: WebGLRenderBuffer, offsetX: number, offsetY: number): number {
 		let drawCalls = 0;
 
