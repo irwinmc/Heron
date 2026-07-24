@@ -157,4 +157,49 @@ describe('EventDispatcher', () => {
 		d.removeEventListener('test', fn, false); // try remove from bubble
 		expect(d.hasEventListener('test')).toBe(true);
 	});
+
+	describe('once() reentrancy', () => {
+		it('consumes a once-listener before a recursive dispatch on the same dispatcher', () => {
+			const dispatcher = new EventDispatcher();
+			const listener = vi.fn(() => dispatcher.dispatchEventWith('test'));
+			dispatcher.once('test', listener);
+
+			dispatcher.dispatchEventWith('test');
+
+			expect(listener).toHaveBeenCalledOnce();
+			expect(dispatcher.hasEventListener('test')).toBe(false);
+		});
+
+		it('keeps once-listeners isolated across nested dispatchers', () => {
+			const a = new EventDispatcher();
+			const b = new EventDispatcher();
+			const aOnce = vi.fn();
+			const bOnce = vi.fn();
+
+			a.once('test', aOnce, false, 10);
+			a.addEventListener('test', () => b.dispatchEventWith('test'));
+			b.once('test', bOnce);
+
+			a.dispatchEventWith('test');
+			a.dispatchEventWith('test');
+			b.dispatchEventWith('test');
+
+			expect(aOnce).toHaveBeenCalledOnce();
+			expect(bOnce).toHaveBeenCalledOnce();
+		});
+
+		it('restores dispatch state and consumes once-listeners when a listener throws', () => {
+			const dispatcher = new EventDispatcher();
+			const error = new Error('listener failed');
+			const listener = vi.fn(() => {
+				throw error;
+			});
+			dispatcher.once('test', listener);
+
+			expect(() => dispatcher.dispatchEventWith('test')).toThrow(error);
+			expect(listener).toHaveBeenCalledOnce();
+			expect(dispatcher.hasEventListener('test')).toBe(false);
+			expect((dispatcher as unknown as { _notifyLevel: number })._notifyLevel).toBe(0);
+		});
+	});
 });

@@ -61,11 +61,12 @@ interface DisplayListCacheInstruction {
 	transform: TransformState;
 }
 
-/** Emitted when a RenderGroup container is encountered during build. */
+/**
+ * Emitted when a RenderGroup container is encountered during build.
+ */
 interface RenderGroupInstruction {
 	renderPipeId: 'renderGroup';
 	renderable: DisplayObject;
-	/** The independent InstructionSet owned by this RenderGroup. */
 	set: InstructionSet;
 	offsetX: number;
 	offsetY: number;
@@ -197,6 +198,21 @@ export class WebGLRenderer {
 	 * Recursively traverse the DisplayObject tree and append instructions to `set`.
 	 * Captures the current transform/alpha/tint state into each instruction.
 	 */
+	/**
+	 * Recursively build render instructions for the display subtree rooted at
+	 * `displayObject`, appending leaf/effect/group instructions into `set`.
+	 *
+	 * A `cacheAsBitmap` object is treated as a single opaque leaf: a synthetic
+	 * `BitmapInstruction` backed by its DisplayList cache is emitted via
+	 * `addLeaf` (not `add`), so an ancestor's later transform/alpha/tint
+	 * change can still refresh this instruction's snapshot through the same
+	 * `renderableIndex` path as ordinary leaves; the cache itself is refreshed
+	 * lazily during the execute phase if dirty.
+	 *
+	 * A child with `isRenderGroup` is built into its own `InstructionSet` and
+	 * emitted as a single `renderGroup` instruction in the parent set, rather
+	 * than being inlined here.
+	 */
 	private _buildInstructions(
 		displayObject: DisplayObject,
 		set: InstructionSet,
@@ -205,13 +221,10 @@ export class WebGLRenderer {
 		offsetY: number,
 		isStage = false,
 	): void {
-		// cacheAsBitmap — treat as a single opaque leaf; render offscreen lazily.
 		const $displayList = displayObject.$displayList;
 		if ($displayList && !isStage) {
-			// Emit a synthetic BitmapInstruction backed by the DisplayList cache.
-			// The execute phase will refresh the cache if dirty.
 			const inst = this._makeCacheInstruction(displayObject, offsetX, offsetY, buffer);
-			if (inst) set.add(inst);
+			if (inst) set.addLeaf(inst);
 			return;
 		}
 
@@ -249,8 +262,6 @@ export class WebGLRenderer {
 			if (child.$tintRGB !== 0xffffff) buffer.globalTintColor = child.$tintRGB;
 
 			// Emit effect wrappers then recurse.
-			// RenderGroup: build the subtree into its own InstructionSet and
-			// emit a single renderGroup instruction into the parent set.
 			if (child instanceof DisplayObjectContainer && child.isRenderGroup) {
 				this._buildRenderGroup(child, set, buffer, ox, oy);
 			} else {
@@ -493,30 +504,76 @@ export class WebGLRenderer {
 
 	// ── Partial update ────────────────────────────────────────────────────────
 
+	/**
+	 * Patch cached transform/alpha/tint snapshots for objects marked dirty
+	 * since the last build, without forcing a full instruction rebuild.
+	 *
+	 * `set.renderableIndex.get(obj)` misses (returns `undefined`) in two
+	 * distinct cases, both handled by recursing/flagging rather than
+	 * refreshing directly:
+	 * 1. `obj` is a plain container (or any non-leaf) whose own
+	 *    transform/alpha/tint changed. Containers never get a leaf
+	 *    instruction (see `_buildLeaf`'s switch — containers don't match any
+	 *    `RenderObjectType` case), so without recursing into descendants here,
+	 *    their cached snapshots would never be refreshed: Canvas re-walks the
+	 *    tree every frame and picks up new state for free, but WebGL's
+	 *    snapshot-based leaves would keep drawing at the old position
+	 *    indefinitely.
+	 * 2. `obj` is a leaf-type object that was skipped during
+	 *    `_buildInstructions` because its graphics commands were empty at
+	 *    build time (e.g. a UI component whose Validator fills commands one
+	 *    frame later). If it now has graphics content, flag the set for a
+	 *    full rebuild so it gets an instruction.
+	 *
+	 * When a hit is found, the snapshot is rebuilt from the object's current
+	 * world transform rather than `buffer.globalMatrix`, since that reflects
+	 * the main buffer's current state, not this object's.
+	 */
 	private _updateDirtyRenderables(set: InstructionSet): void {
 		for (let i = 0; i < set.dirtyRenderableCount; i++) {
 			const obj = set.dirtyRenderables[i];
-			// Look up the instruction index for this object.
 			const idx = set.renderableIndex.get(obj);
 			if (idx === undefined) {
-				// This object has no instruction — it may have been skipped during
-				// _buildInstructions because its graphics commands were empty at the
-				// time (e.g. UI components whose Validator fills commands one frame
-				// later). If it now has graphics content, trigger a full rebuild so
-				// it gets an instruction.
-				if (this._hasGraphicsContent(obj)) {
+				if (obj.$children && obj.$children.length > 0) {
+					this._refreshDescendantTransforms(obj, set);
+				} else if (this._hasGraphicsContent(obj)) {
 					set.structureDirty = true;
 				}
 				continue;
 			}
 			const inst = set.instructions[idx] as LeafInstruction;
 			if (!inst) continue;
-			// Recompute the transform snapshot from the object's current world state.
-			// We can't use buffer.globalMatrix here (it's the main buffer's current
-			// state, not the object's world transform), so we rebuild from scratch.
 			this._refreshLeafTransform(obj, inst);
 		}
 		set.dirtyRenderableCount = 0;
+	}
+
+	/**
+	 * Recursively refresh the transform snapshot of every descendant leaf
+	 * instruction under `obj`. Used when an ancestor container's own
+	 * transform/alpha/tint changed — the container itself has no instruction,
+	 * but its descendants' cached snapshots are now stale and must be patched
+	 * without forcing a full structural rebuild.
+	 *
+	 * Stops descending into a subtree once it hits a nested RenderGroup —
+	 * that subtree owns its own InstructionSet and is refreshed independently
+	 * (see markRenderableDirty's RenderGroup routing), so walking into it here
+	 * would refresh against the wrong InstructionSet.
+	 */
+	private _refreshDescendantTransforms(obj: DisplayObject, set: InstructionSet): void {
+		const children = obj.$children;
+		if (!children) return;
+		for (const child of children) {
+			if (child instanceof DisplayObjectContainer && child.isRenderGroup) continue;
+			const idx = set.renderableIndex.get(child);
+			if (idx !== undefined) {
+				const inst = set.instructions[idx] as LeafInstruction;
+				if (inst) this._refreshLeafTransform(child, inst);
+			}
+			if (child.$children && child.$children.length > 0) {
+				this._refreshDescendantTransforms(child, set);
+			}
+		}
 	}
 
 	/**
@@ -538,7 +595,9 @@ export class WebGLRenderer {
 		t.tint = obj.$worldTint;
 	}
 
-	/** Check if a display object now has graphics content that warrants an instruction. */
+	/**
+	 * Check if a display object now has graphics content that warrants an instruction.
+	 */
 	private _hasGraphicsContent(obj: DisplayObject): boolean {
 		const graphics = obj.graphics;
 		return graphics != null && graphics.commands.length > 0;

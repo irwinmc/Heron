@@ -108,10 +108,6 @@ export class ByteArray {
 	}
 
 	public get bytesAvailable(): number {
-		return this._data.byteLength - this._position;
-	}
-
-	public get readAvailable(): number {
 		return this._writePosition - this._position;
 	}
 
@@ -304,7 +300,7 @@ export class ByteArray {
 	// ── Internal ──────────────────────────────────────────────────────────────
 
 	public validate(len: number): boolean {
-		if (this._bytes.length > 0 && this._position + len <= this._bytes.length) return true;
+		if (this._writePosition > 0 && this._position + len <= this._writePosition) return true;
 		throw new RangeError('ByteArray: read past end');
 	}
 
@@ -325,7 +321,7 @@ export class ByteArray {
 	}
 
 	private _validate(len: number): void {
-		if (this._position + len > this._bytes.length) {
+		if (this._position + len > this._writePosition) {
 			throw new RangeError('ByteArray: read past end');
 		}
 	}

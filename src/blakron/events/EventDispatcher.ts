@@ -11,8 +11,6 @@ interface EventBin {
 	once: boolean;
 }
 
-const ONCE_LIST: EventBin[] = [];
-
 export class EventDispatcher extends HashObject implements IEventDispatcher {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
@@ -137,17 +135,19 @@ export class EventDispatcher extends HashObject implements IEventDispatcher {
 		if (!list || list.length === 0) return true;
 
 		this._notifyLevel++;
-		for (let i = 0; i < list.length; i++) {
-			const entry = list[i];
-			entry.listener.call(this, event);
-			if (entry.once) ONCE_LIST.push(entry);
-			if (event.isPropagationImmediateStopped) break;
-		}
-		this._notifyLevel--;
+		try {
+			for (let i = 0; i < list.length; i++) {
+				const entry = list[i];
 
-		while (ONCE_LIST.length) {
-			const entry = ONCE_LIST.pop()!;
-			this.removeEventListener(entry.type, entry.listener, entry.useCapture);
+				// Remove once-listeners before invoking them. The active dispatch keeps
+				// its snapshot, while any nested dispatch observes the updated map.
+				if (entry.once) this.removeEventListener(entry.type, entry.listener, entry.useCapture);
+
+				entry.listener.call(this, event);
+				if (event.isPropagationImmediateStopped) break;
+			}
+		} finally {
+			this._notifyLevel--;
 		}
 
 		return !event.isDefaultPrevented();

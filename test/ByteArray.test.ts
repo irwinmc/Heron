@@ -172,8 +172,73 @@ describe('ByteArray', () => {
 		ba.writeInt(1);
 		ba.writeInt(2);
 		ba.position = 0;
-		expect(ba.readAvailable).toBe(8);
+		expect(ba.bytesAvailable).toBe(8);
 		ba.readInt();
-		expect(ba.readAvailable).toBe(4);
+		expect(ba.bytesAvailable).toBe(4);
+	});
+
+	describe('logical vs physical read boundary (bufferExtSize)', () => {
+		it('bytesAvailable is 0 for an empty ByteArray with pre-allocated capacity', () => {
+			// bufferExtSize pre-allocates physical capacity ahead of any writes.
+			// Nothing has been written, so there is nothing to read yet.
+			const ba = new ByteArray(undefined, 8);
+			expect(ba.length).toBe(0);
+			expect(ba.bytesAvailable).toBe(0);
+		});
+
+		it('readByte throws at the logical end even though physical capacity remains', () => {
+			const ba = new ByteArray(undefined, 8);
+			// _bytes is physically 8 bytes long (all zero) but nothing was written.
+			expect(() => ba.readByte()).toThrow(RangeError);
+			expect(() => ba.readUnsignedByte()).toThrow(RangeError);
+			expect(() => ba.readBoolean()).toThrow(RangeError);
+		});
+
+		it('bytesAvailable only reflects bytes actually written, not physical slack', () => {
+			const ba = new ByteArray(undefined, 16);
+			ba.writeByte(1);
+			ba.writeByte(2);
+			ba.position = 0;
+			// Physical capacity is 16, but only 2 bytes were ever written.
+			expect(ba.bytesAvailable).toBe(2);
+			ba.readByte();
+			expect(ba.bytesAvailable).toBe(1);
+			ba.readByte();
+			expect(ba.bytesAvailable).toBe(0);
+			expect(() => ba.readByte()).toThrow(RangeError);
+		});
+
+		it('readUnsignedInt throws past write position even with room in physical buffer', () => {
+			const ba = new ByteArray(undefined, 64);
+			ba.writeUnsignedShort(42); // 2 bytes written, 62 bytes of physical slack
+			ba.position = 0;
+			expect(() => ba.readUnsignedInt()).toThrow(RangeError);
+		});
+
+		it('readUTFBytes throws when requested length exceeds the logical write position', () => {
+			const ba = new ByteArray(undefined, 32);
+			ba.writeUTFBytes('hi'); // 2 bytes written
+			ba.position = 0;
+			expect(() => ba.readUTFBytes(10)).toThrow(RangeError);
+		});
+
+		it('validate() throws past the logical write position on physically-capacious buffers', () => {
+			const ba = new ByteArray(undefined, 100);
+			ba.writeByte(1);
+			ba.position = 1; // exactly at write position
+			expect(() => ba.validate(1)).toThrow(RangeError);
+			ba.position = 0;
+			expect(ba.validate(1)).toBe(true);
+		});
+
+		it('writing then truncating length re-applies the logical boundary', () => {
+			const ba = new ByteArray(undefined, 32);
+			ba.writeInt(1);
+			ba.writeInt(2);
+			ba.length = 4; // truncate to just the first int
+			ba.position = 0;
+			expect(ba.readInt()).toBe(1);
+			expect(() => ba.readInt()).toThrow(RangeError);
+		});
 	});
 });

@@ -54,7 +54,7 @@ export class Resource {
 	private analyzerMap: Map<string, AnalyzerBase> = new Map<string, AnalyzerBase>();
 	private eventListeners: Map<string, Set<ResourceEventListener>> = new Map<string, Set<ResourceEventListener>>();
 	private loadedNames: Set<string> = new Set<string>();
-	private isConfigLoaded = false;
+	private groupLoadQueue: Promise<unknown> = Promise.resolve();
 
 	// ── Constructor ──────────────────────────────────────────────────────────
 
@@ -72,7 +72,6 @@ export class Resource {
 	public async loadConfig(url: string, folder = ''): Promise<void> {
 		const data = await this.fetchConfig(url);
 		this.config.parseConfig(data, folder);
-		this.isConfigLoaded = true;
 		this.emit({
 			type: ResourceEventType.CONFIG_COMPLETE,
 			groupName: '',
@@ -92,8 +91,22 @@ export class Resource {
 
 	/**
 	 * Load all resources in a group. Returns a promise that resolves when done.
+	 *
+	 * `this.loader` is a single shared instance, so running two batches at once
+	 * would let the second call's queue/callbacks silently replace the first's
+	 * mid-flight. Concurrent calls (for the same or different groups) are
+	 * therefore chained onto `groupLoadQueue` and run to completion one at a
+	 * time; each call still gets its own promise that resolves/rejects
+	 * independently once its turn comes up, and a failed batch doesn't block
+	 * the ones queued after it.
+	 *
+	 * The already-loaded filter is recomputed once this call's turn actually
+	 * starts (inside `run()`), not at call time — otherwise an
+	 * already-queued, overlapping `loadGroup()` call could finish loading some
+	 * of these items first, and a stale snapshot would re-load them anyway.
+	 *
 	 * @param groupName Name of the group to load
-	 * @param priority Loading priority (higher = loads first)
+	 * @param priority Reserved for future prioritized loading; currently unused by `ResourceLoader`
 	 * @param onProgress Optional progress callback
 	 */
 	public async loadGroup(groupName: string, priority = 0, onProgress?: ProgressCallback): Promise<void> {
@@ -102,12 +115,15 @@ export class Resource {
 			throw new Error(`Resource group "${groupName}" not found or is empty.`);
 		}
 
-		// Filter out already-loaded items
-		const toLoad = items.filter(item => !this.isResourceLoaded(item.name));
+		const run = (): Promise<void> => {
+			const toLoad = items.filter(item => !this.isResourceLoaded(item.name));
+			if (toLoad.length === 0) return Promise.resolve();
+			return this.loadResourceList(toLoad, groupName, priority, onProgress);
+		};
 
-		if (toLoad.length === 0) return;
-
-		await this.loadResourceList(toLoad, groupName, priority, onProgress);
+		const scheduled = this.groupLoadQueue.then(run, run);
+		this.groupLoadQueue = scheduled.catch(() => undefined);
+		return scheduled;
 	}
 
 	// ── Single resource loading ──────────────────────────────────────────────
@@ -369,9 +385,10 @@ export class Resource {
 				});
 			};
 
-			this.loader.onProgress = (_loaded: number, _total: number): void => {
-				// Additional progress tracking if needed
-			};
+			// No-op: item-level progress is already reported above via
+			// `this.loader.onComplete`. This just satisfies the loader's
+			// optional callback slot.
+			this.loader.onProgress = (_loaded: number, _total: number): void => {};
 
 			this.loader.start().then(() => {
 				this.loader.onComplete = undefined;

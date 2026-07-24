@@ -97,31 +97,61 @@ export class ResourceLoader {
 		}
 	}
 
+	/**
+	 * Load a single item via its registered analyzer and route the outcome
+	 * through `finishItem()`, regardless of how it finished (no analyzer,
+	 * synchronous throw, rejection, or a resolved result).
+	 *
+	 * `analyzer.loadFile(item)` is a plain (possibly user-supplied) method —
+	 * it isn't guaranteed to always return a Promise before throwing. If it
+	 * throws synchronously instead of rejecting, that exception happens on
+	 * the call expression itself, before any Promise exists to attach
+	 * `.catch()` to; without the try/catch below, the exception would
+	 * propagate out of `loadItem()` (past `next()`'s while-loop, skipping
+	 * every subsequent item this tick) and this item's `activeCount` slot
+	 * would never be retired, permanently wedging `start()`.
+	 */
 	private loadItem(item: ResourceItem): void {
 		const analyzer = this.analyzerMap.get(item.type);
 		if (!analyzer) {
 			item.loaded = false;
-			this.onItemError(item);
+			this.finishItem(item);
 			return;
 		}
 
-		analyzer
-			.loadFile(item)
-			.then(result => {
-				this.loadingList = this.loadingList.filter(i => i !== item);
-				this.activeCount--;
+		let result: Promise<ResourceItem>;
+		try {
+			result = analyzer.loadFile(item);
+		} catch {
+			item.loaded = false;
+			this.finishItem(item);
+			return;
+		}
 
-				if (result.loaded) {
-					this.onItemComplete(result);
-				} else {
-					this.onItemError(result);
-				}
+		result
+			.then(r => {
+				this.finishItem(r);
 			})
 			.catch(() => {
-				this.loadingList = this.loadingList.filter(i => i !== item);
-				this.activeCount--;
-				this.onItemError(item);
+				item.loaded = false;
+				this.finishItem(item);
 			});
+	}
+
+	/**
+	 * Single completion point for an in-flight item, whether it loaded, failed,
+	 * threw, or had no analyzer. Decrements `activeCount` exactly once per item
+	 * so retry / no-analyzer paths can't double-decrement or leak a slot.
+	 */
+	private finishItem(item: ResourceItem): void {
+		this.loadingList = this.loadingList.filter(i => i !== item);
+		this.activeCount--;
+
+		if (item.loaded) {
+			this.onItemComplete(item);
+		} else {
+			this.onItemError(item);
+		}
 	}
 
 	private onItemComplete(item: ResourceItem): void {
@@ -139,7 +169,6 @@ export class ResourceLoader {
 		if (retries < this.retryCount) {
 			this.retryDic.set(item.name, retries + 1);
 			this.pendingList.push(item);
-			this.activeCount--;
 			this.next();
 			return;
 		}
