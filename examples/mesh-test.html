@@ -264,11 +264,6 @@
 			mesh.anchorOffsetY = 128;
 			root.addChild(mesh);
 
-			let cleanVertices = [];
-			let animMode = null;
-			let animT = 0;
-			let baseVertices = [];
-
 			// ── Preset builders ───────────────────────────────────────────────
 			const W = 256,
 				H = 256;
@@ -283,29 +278,27 @@
 				});
 			}
 
-			function setQuad() {
-				mesh.vertices = [0, 0, W, 0, W, H, 0, H];
-				mesh.indices = [0, 1, 2, 0, 2, 3];
-				mesh.uvs = [0, 0, 1, 0, 1, 1, 0, 1];
-				mesh.updateVertices();
-				resetDeformSliders();
-				cleanVertices = [...mesh.vertices];
-				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
-				logMsg('ACTION', 'Preset: Quad', 'tag-action');
+			// ── Shape builders (pure: return {vertices, uvs, indices}) ───────
+			// Pure shape builders. These never touch `mesh` directly so they can
+			// be reused both for setting a preset and for producing a densified
+			// version on animation start.
+			function quadShape() {
+				return {
+					vertices: [0, 0, W, 0, W, H, 0, H],
+					indices: [0, 1, 2, 0, 2, 3],
+					uvs: [0, 0, 1, 0, 1, 1, 0, 1],
+				};
 			}
 
-			function setTriangle() {
-				mesh.vertices = [W / 2, 0, W, H, 0, H];
-				mesh.indices = [0, 1, 2];
-				mesh.uvs = [0.5, 0, 1, 1, 0, 1];
-				mesh.updateVertices();
-				resetDeformSliders();
-				cleanVertices = [...mesh.vertices];
-				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
-				logMsg('ACTION', 'Preset: Triangle', 'tag-action');
+			function triangleShape() {
+				return {
+					vertices: [W / 2, 0, W, H, 0, H],
+					indices: [0, 1, 2],
+					uvs: [0.5, 0, 1, 1, 0, 1],
+				};
 			}
 
-			function setFan(n = 8) {
+			function fanShape(n = 8) {
 				const cx = W / 2,
 					cy = H / 2,
 					r = W / 2;
@@ -318,17 +311,10 @@
 					uvs.push(0.5 + Math.cos(a) * 0.5, 0.5 + Math.sin(a) * 0.5);
 					if (i < n) idx.push(0, i + 1, i + 2);
 				}
-				mesh.vertices = verts;
-				mesh.uvs = uvs;
-				mesh.indices = idx;
-				mesh.updateVertices();
-				resetDeformSliders();
-				cleanVertices = [...mesh.vertices];
-				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
-				logMsg('ACTION', `Preset: Fan (${n})`, 'tag-action');
+				return { vertices: verts, uvs, indices: idx };
 			}
 
-			function setGrid(cols = 4, rows = 4) {
+			function gridShape(cols = 4, rows = 4) {
 				const verts = [],
 					uvs = [],
 					idx = [];
@@ -344,17 +330,10 @@
 						idx.push(i, i + 1, i + cols + 2, i, i + cols + 2, i + cols + 1);
 					}
 				}
-				mesh.vertices = verts;
-				mesh.uvs = uvs;
-				mesh.indices = idx;
-				mesh.updateVertices();
-				resetDeformSliders();
-				cleanVertices = [...mesh.vertices];
-				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
-				logMsg('ACTION', `Preset: Grid ${cols}x${rows}`, 'tag-action');
+				return { vertices: verts, uvs, indices: idx };
 			}
 
-			function setStrip(segs = 8) {
+			function stripShape(segs = 8) {
 				const verts = [],
 					uvs = [],
 					idx = [];
@@ -368,14 +347,99 @@
 						idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
 					}
 				}
-				mesh.vertices = verts;
-				mesh.uvs = uvs;
-				mesh.indices = idx;
+				return { vertices: verts, uvs, indices: idx };
+			}
+
+			// Densified triangle for animation. Emits a triangle fan from the
+			// centroid to a finely-sampled boundary loop of the triangle
+			// (W/2,0)-(W,H)-(0,H). Pure.
+			function triangleDenseShape(segsPerEdge = 16) {
+				const v0 = [W / 2, 0],
+					v1 = [W, H],
+					v2 = [0, H];
+				const cx = (v0[0] + v1[0] + v2[0]) / 3,
+					cy = (v0[1] + v1[1] + v2[1]) / 3;
+				const verts = [cx, cy];
+				const uvs = [cx / W, cy / H];
+				const idx = [];
+				const boundary = [v0, v1, v2];
+				for (let e = 0; e < 3; e++) {
+					const p0 = boundary[e],
+						p1 = boundary[(e + 1) % 3];
+					for (let s = 0; s <= segsPerEdge; s++) {
+						if (e > 0 && s === 0) continue; // skip shared corners
+						const t = s / segsPerEdge;
+						const px = p0[0] + (p1[0] - p0[0]) * t;
+						const py = p0[1] + (p1[1] - p0[1]) * t;
+						verts.push(px, py);
+						uvs.push(px / W, py / H);
+					}
+				}
+				const ringCount = verts.length / 2 - 1;
+				for (let i = 0; i < ringCount; i++) {
+					idx.push(0, 1 + i, 1 + ((i + 1) % ringCount));
+				}
+				return { vertices: verts, uvs, indices: idx };
+			}
+
+			// ── Animation state ───────────────────────────────────────────────
+			// `presetShape` holds the currently-selected preset's clean shape
+			// (sparse). Animations read from a (possibly densified) copy of this
+			// so switching presets mid-animation resyncs cleanly. Stopping an
+			// animation restores `presetShape`.
+			let presetShape = quadShape();
+			let activePreset = 'quad';
+			let animMode = null;
+			let animT = 0;
+			let baseVertices = [];
+
+			// Returns a densified shape for low-vertex presets so wave/ripple/twist
+			// have enough vertices to be visible. With only 4 corners a quad's
+			// wave degenerates to rigid up-down bobbing (both top verts share the
+			// same phase since the wave period equals W), ripple degenerates to
+			// uniform scale (all corners are equidistant from the center), and
+			// twist degenerates to pure rotation (same reason). Subdividing
+			// preserves the outline shape while giving the animation something
+			// to act on. Returns null for presets that already have enough
+			// vertices (fan/grid/strip).
+			function denseShapeFor(preset) {
+				if (preset === 'quad') return gridShape(8, 8);
+				if (preset === 'triangle') return triangleDenseShape(16);
+				return null;
+			}
+
+			// Apply a shape {vertices, uvs, indices} to the mesh.
+			function applyShape(shape) {
+				mesh.vertices = shape.vertices;
+				mesh.uvs = shape.uvs;
+				mesh.indices = shape.indices;
 				mesh.updateVertices();
+			}
+
+			// ── Preset setters ────────────────────────────────────────────────
+			function selectPreset(name, shape, label) {
+				presetShape = shape;
+				activePreset = name;
+				applyShape(shape);
 				resetDeformSliders();
-				cleanVertices = [...mesh.vertices];
-				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
-				logMsg('ACTION', `Preset: Strip (${segs})`, 'tag-action');
+				if (animMode) startAnim(animMode); // resync animation to new shape
+				logMsg('ACTION', label, 'tag-action');
+			}
+
+			function setQuad() {
+				selectPreset('quad', quadShape(), 'Preset: Quad');
+			}
+			function setTriangle() {
+				selectPreset('triangle', triangleShape(), 'Preset: Triangle');
+			}
+			function setFan(n = 8) {
+				selectPreset('fan', fanShape(n), `Preset: Fan (${n})`);
+			}
+			function setGrid(cols = 4, rows = 4) {
+				selectPreset('grid', gridShape(cols, rows), `Preset: Grid ${cols}x${rows}`);
+			}
+			function setStrip(segs = 8) {
+				selectPreset('strip', stripShape(segs), `Preset: Strip (${segs})`);
 			}
 
 			// ── Preset buttons ────────────────────────────────────────────────
@@ -398,7 +462,7 @@
 				setActivePreset('btn-grid');
 			};
 
-			setGrid(8, 8); // default shape for animations
+			setQuad(); // default
 
 			// ── Quad deform (only meaningful for quad preset) ─────────────────
 			// Base quad corners: TL(0,0) TR(W,0) BR(W,H) BL(0,H)
@@ -428,13 +492,20 @@
 			};
 
 			// ── Animation ─────────────────────────────────────────────────────
+			// animMode/animT/baseVertices are declared earlier (before the preset
+			// builders) so preset switches can resync the animation base shape.
 
 			function startAnim(mode) {
-				// Reset to clean shape so switching animation modes doesn't accumulate.
-				mesh.vertices = [...cleanVertices];
-				mesh.updateVertices();
+				// Start from the clean preset shape, but use a densified version
+				// for low-vertex presets (quad/triangle) so wave/ripple/twist have
+				// enough vertices to be visible. Without densification a quad's
+				// wave is just rigid up-down bobbing, ripple is uniform scale, and
+				// twist is pure rotation (all four corners share phase / distance).
+				const dense = denseShapeFor(activePreset);
+				const shape = dense || presetShape;
+				applyShape(shape);
 				animMode = mode;
-				baseVertices = [...cleanVertices];
+				baseVertices = [...shape.vertices];
 				animT = 0;
 				// Disable deform sliders during animation
 				deformIds.forEach(id => {
@@ -444,17 +515,17 @@
 				logMsg('ACTION', `Animation: ${mode}`, 'tag-action');
 			}
 
-			document.getElementById('btn-wave').onclick = () => {
-				startAnim('wave');
-			};
-			document.getElementById('btn-ripple').onclick = () => {
-				startAnim('ripple');
-			};
-			document.getElementById('btn-twist').onclick = () => {
-				startAnim('twist');
-			};
+			// Animate whatever preset shape is currently active instead of forcing
+			// a grid — this keeps the animated mesh consistent with the Preset
+			// Shapes selection (e.g. Fan stays a fan while animating).
+			document.getElementById('btn-wave').onclick = () => startAnim('wave');
+			document.getElementById('btn-ripple').onclick = () => startAnim('ripple');
+			document.getElementById('btn-twist').onclick = () => startAnim('twist');
 			document.getElementById('btn-stop-anim').onclick = () => {
 				animMode = null;
+				// Restore the clean (sparse) preset shape — undoing any
+				// densification applied at animation start.
+				applyShape(presetShape);
 				// Re-enable deform sliders
 				deformIds.forEach(id => {
 					document.getElementById(id).disabled = false;
