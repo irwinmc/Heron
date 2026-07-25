@@ -2,6 +2,8 @@
 
 A modern rewrite of the Egret game engine. Maintains Egret-compatible display object and event APIs while upgrading the rendering architecture, type safety, and tooling.
 
+> **Stable (1.0.0).** Targets ES2022 and evergreen browsers (Chrome / Edge / Firefox / Safari). No IE / old-Android / pre-2022 Safari support shims.
+
 ## Features
 
 **Rendering Engine**
@@ -35,6 +37,15 @@ A modern rewrite of the Egret game engine. Maintains Egret-compatible display ob
 - Sound (Web Audio + HTML Audio fallback) / Video playback
 - ByteArray / Timer / Logger / FontManager / LocalStorage
 - Full `strict: true` TypeScript, zero `any`
+
+**Migrating from Egret (1.0.0 breaking changes)**
+
+- `.hashCode` and the `HashObject` base class were removed. Use `WeakMap`-keyed lookups or `===` for object identity instead of comparing integer hash codes. Internal consumers were migrated to `WeakMap` in 0.6.3.
+- `Resource.instance` (singleton getter) was removed — import the shared `resource` instance directly: `import { resource } from '@blakron/core'`.
+- The multi-Player listener registration API on `DisplayObject` / `DisplayObjectContainer` (`addStructureChangeListener` / `addRenderableDirtyListener` / `addContainerStructureChangeListener`) was removed — the engine is single-Player by design.
+- `WebGLRenderContext.getInstance()` / `resetInstance()` were removed — `Player` constructs the context directly.
+- Internal fields were renamed with a `$` prefix (e.g. `$x`, `$y`, `$renderDirty`) to separate engine state from public API.
+- Vendor-prefixed fallbacks (`experimental-webgl`, `webkitAudioContext`, `webkit/moz fullscreen`) and the hand-rolled base64 implementation were removed in favour of native APIs.
 
 **vs. Egret**
 
@@ -93,14 +104,16 @@ root.addChild(rect);
 ```bash
 pnpm install
 pnpm run build        # compile
-pnpm run test         # run tests (569 cases)
+pnpm run test         # run tests (565 cases)
 pnpm run dev          # watch mode
 ```
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — rendering pipeline, API comparison, breaking changes
-- [Resource Manager](docs/resource.md) — Resource API reference, config format, custom parsers
+- [CHANGELOG.md](./CHANGELOG.md) — versioned release notes, including the full list of 1.0.0 breaking changes
+- [Architecture](https://irwinmc.github.io/blakron-demo/) — live demo of rendering features
+
+> The pre-1.0 `docs/architecture.md` and `docs/resource.md` were local-only and not committed; they are being rewritten for 1.x. If you need a specific reference, open an issue.
 
 ## Test Pages
 
