@@ -38,30 +38,30 @@ A modern rewrite of the Egret game engine. Maintains Egret-compatible display ob
 
 **vs. Egret**
 
-| Aspect     | Egret             | Blakron               |
-| ---------- | ----------------- | --------------------- |
-| Code size  | 42,340 lines      | ~13,000 lines         |
-| Modules    | `namespace egret` | ES Module             |
-| Type safety| pervasive `any`   | `strict: true`        |
-| Target     | ES5               | ES2022                |
-| Pipeline   | RenderNode tree   | Flat InstructionSet   |
-| Batching   | same-texture      | multi-texture (8/batch) |
+| Aspect      | Egret             | Blakron                 |
+| ----------- | ----------------- | ----------------------- |
+| Code size   | 42,340 lines      | ~18,500 lines           |
+| Modules     | `namespace egret` | ES Module               |
+| Type safety | pervasive `any`   | `strict: true`          |
+| Target      | ES5               | ES2022                  |
+| Pipeline    | RenderNode tree   | Flat InstructionSet     |
+| Batching    | same-texture      | multi-texture (8/batch) |
 
 **Design Credits**
 
 The rendering pipeline borrows concepts from Pixi.js 8 while keeping the Egret display object model and API intact:
 
-| Aspect                                 | Source    | Notes                                                          |
-| -------------------------------------- | --------- | -------------------------------------------------------------- |
-| InstructionSet + RenderPipe two-phase  | Pixi.js 8 | Build → flat instructions, Execute → dispatch by `renderPipeId`|
-| RenderGroup layers                     | Pixi.js 8 | `isRenderGroup` isolates subtree instruction sets              |
-| Multi-texture batching                 | Pixi.js   | `aTextureId` per vertex, up to 8 textures per draw call        |
-| Tint                                   | Pixi.js   | `displayObject.tint` passed as premultiplied vertex color      |
-| Dirty flag separation                  | Pixi.js 8 | `structureDirty` (rebuild) vs `renderDirty` (patch)            |
-| Display objects / events / API         | Egret     | Fully preserved for minimal migration cost                     |
-| Filter shaders                         | Egret     | Original GLSL, blur upgraded to ping-pong dual-pass            |
-| WebGL state management                 | Egret     | DrawCmdManager batching command queue                          |
-| Mask strategies                        | Egret     | scissor / stencil / offscreen compositing                      |
+| Aspect                                | Source    | Notes                                                           |
+| ------------------------------------- | --------- | --------------------------------------------------------------- |
+| InstructionSet + RenderPipe two-phase | Pixi.js 8 | Build → flat instructions, Execute → dispatch by `renderPipeId` |
+| RenderGroup layers                    | Pixi.js 8 | `isRenderGroup` isolates subtree instruction sets               |
+| Multi-texture batching                | Pixi.js   | `aTextureId` per vertex, up to 8 textures per draw call         |
+| Tint                                  | Pixi.js   | `displayObject.tint` passed as premultiplied vertex color       |
+| Dirty flag separation                 | Pixi.js 8 | `structureDirty` (rebuild) vs `renderDirty` (patch)             |
+| Display objects / events / API        | Egret     | Fully preserved for minimal migration cost                      |
+| Filter shaders                        | Egret     | Original GLSL, blur upgraded to ping-pong dual-pass             |
+| WebGL state management                | Egret     | DrawCmdManager batching command queue                           |
+| Mask strategies                       | Egret     | scissor / stencil / offscreen compositing                       |
 
 ## Quick Start
 
@@ -93,7 +93,7 @@ root.addChild(rect);
 ```bash
 pnpm install
 pnpm run build        # compile
-pnpm run test         # run tests (225 cases)
+pnpm run test         # run tests (569 cases)
 pnpm run dev          # watch mode
 ```
 
@@ -101,7 +101,6 @@ pnpm run dev          # watch mode
 
 - [Architecture](docs/architecture.md) — rendering pipeline, API comparison, breaking changes
 - [Resource Manager](docs/resource.md) — Resource API reference, config format, custom parsers
-- [WebGL2 Upgrade Plan](docs/webgl2-upgrade.md) — UBO, instancing, texture arrays roadmap
 
 ## Test Pages
 
@@ -111,15 +110,15 @@ Interactive test pages in `examples/` require an HTTP dev server (ES Modules don
 pnpm benchmark
 ```
 
-| Page           | Description                                                               |
-| -------------- | ------------------------------------------------------------------------- |
-| **Visual Test**| 18 cases: Shape, Graphics, Filters, Mask, RenderGroup, Animation          |
-| **Bitmap Test**| Bitmap rendering: scale, rotation, SpriteSheet, scale9Grid, batching      |
-| **Mesh Test**  | Mesh deformation: Quad / Fan / Grid presets, Wave / Ripple / Twist        |
-| **Sound Test** | Sound / SoundChannel: load, play, volume, loop, error handling            |
-| **Video Test** | Video: load, play/pause, seek, volume, resize                             |
-| **Net Test**   | HttpRequest / ImageLoader: GET / POST, responseType, timeout, abort       |
-| **Benchmark**  | WebGL perf: 5 stress scenes with FPS / Draw Calls / Batch Efficiency      |
+| Page            | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| **Visual Test** | 18 cases: Shape, Graphics, Filters, Mask, RenderGroup, Animation     |
+| **Bitmap Test** | Bitmap rendering: scale, rotation, SpriteSheet, scale9Grid, batching |
+| **Mesh Test**   | Mesh deformation: Quad / Fan / Grid presets, Wave / Ripple / Twist   |
+| **Sound Test**  | Sound / SoundChannel: load, play, volume, loop, error handling       |
+| **Video Test**  | Video: load, play/pause, seek, volume, resize                        |
+| **Net Test**    | HttpRequest / ImageLoader: GET / POST, responseType, timeout, abort  |
+| **Benchmark**   | WebGL perf: 5 stress scenes with FPS / Draw Calls / Batch Efficiency |
 
 ## License
 

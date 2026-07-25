@@ -2,7 +2,7 @@
 	"name": "@blakron/core",
 	"version": "0.6.2",
 	"description": "Modern rewrite of the Egret game engine — WebGL multi-texture batching, instruction-driven render pipeline, strict TypeScript, Egret-compatible API",
-	"author": "",
+	"author": "Kelvin <kyia.x52@gmail.com>",
 	"license": "MIT",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -11,13 +11,11 @@
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js",
-			"require": "./dist/index.js"
+			"import": "./dist/index.js"
 		}
 	},
 	"files": [
-		"dist/**/*",
-		"types/**/*"
+		"dist/**/*"
 	],
 	"scripts": {
 		"build": "tsc --build && npm run build:types",

@@ -6,6 +6,19 @@ import type { InstructionSet } from '../InstructionSet.js';
 import type { RenderPipe } from '../../RenderPipe.js';
 import type { CanvasRenderer } from '../../canvas/index.js';
 import { RenderBuffer } from '../../canvas/index.js';
+import type { GL } from '../WebGLUtils.js';
+
+// ── Texture GC registry ───────────────────────────────────────────────────────
+
+/**
+ * When a TextField is GC'd, automatically release its cached WebGL texture.
+ * TextFields are frequently created and discarded without an explicit
+ * destroyRenderable() call (e.g. UI relayouts, virtualized lists), so this
+ * is the primary cleanup path — mirrors GraphicsPipe's texture registry.
+ */
+const _textureRegistry = new FinalizationRegistry<{ gl: GL; texture: WebGLTexture }>(({ gl, texture }) => {
+	gl.deleteTexture(texture);
+});
 
 // ── Instruction ───────────────────────────────────────────────────────────────
 
@@ -58,6 +71,8 @@ export class TextPipe implements RenderPipe<TextField> {
 	// ── Instance fields ───────────────────────────────────────────────────────
 	private readonly _canvasRenderer: CanvasRenderer;
 	private readonly _cache = new WeakMap<TextField, TextCache>();
+	private readonly _registryTokens = new WeakMap<TextField, object>();
+	private _gl?: GL;
 
 	// ── Constructor ───────────────────────────────────────────────────────────
 	public constructor(canvasRenderer: CanvasRenderer) {
@@ -93,6 +108,16 @@ export class TextPipe implements RenderPipe<TextField> {
 	}
 
 	public destroyRenderable(tf: TextField): void {
+		const cache = this._cache.get(tf);
+		if (cache?.texture) {
+			// Unregister from GC registry and delete texture immediately.
+			const token = this._registryTokens.get(tf);
+			if (token) {
+				_textureRegistry.unregister(token);
+				this._registryTokens.delete(tf);
+			}
+			if (this._gl) this._gl.deleteTexture(cache.texture);
+		}
 		this._cache.delete(tf);
 	}
 
@@ -111,6 +136,9 @@ export class TextPipe implements RenderPipe<TextField> {
 	public execute(inst: TextInstruction, buffer: WebGLRenderBuffer): void {
 		const tf = inst.renderable;
 		tf.getLinesArr(); // ensure lines are computed
+
+		// Cache the GL context for use in destroyRenderable.
+		if (!this._gl) this._gl = buffer.context.gl;
 
 		// ── INPUT mode while focused: HTML input element owns the display ────
 		// Don't render the canvas texture — the native <input>/<textarea>
@@ -194,11 +222,21 @@ export class TextPipe implements RenderPipe<TextField> {
 			this._canvasRenderer.renderTextFieldToContext(tf, ctx, 0, 0);
 
 			// Upload to WebGL texture.
-			const surface = cache.renderBuffer.surface as HTMLCanvasElement;
+			const surface = cache.renderBuffer.surface;
 			if (!cache.texture) {
 				cache.texture = buffer.context.createTexture(surface);
+				// Register for GC-based cleanup.
+				const token = {};
+				_textureRegistry.register(tf, { gl: buffer.context.gl, texture: cache.texture }, token);
+				this._registryTokens.set(tf, token);
 			} else {
+				// Unregister old texture, create new registration for updated texture.
+				const oldToken = this._registryTokens.get(tf);
+				if (oldToken) _textureRegistry.unregister(oldToken);
 				buffer.context.updateTexture(cache.texture, surface);
+				const token = {};
+				_textureRegistry.register(tf, { gl: buffer.context.gl, texture: cache.texture }, token);
+				this._registryTokens.set(tf, token);
 			}
 			cache.textureWidth = pixelW;
 			cache.textureHeight = pixelH;
