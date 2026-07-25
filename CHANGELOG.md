@@ -4,6 +4,48 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.0] — 2026-07-26
+
+First stable release. From this version forward the public API surface (exports from `src/index.ts`) is committed to backward-compatible evolution per semver.
+
+### Fixed
+
+- **StageText**: Removed 6 development-time `console.log` debug statements (in `resetStageText`, the focus/blur listeners, `initElementPosition`, `executeShow`, and the deferred-focus path) that would spam the console of any production app using text inputs. These were not routed through `Logger` and could not be silenced.
+
+### Build
+
+- **package.json**: Added a `prepublishOnly` hook (`npm run clean && npm run build`) so `npm publish` always ships a freshly built `dist/`. `dist/` is gitignored, so without this hook publishing from a fresh clone or CI would emit an empty package.
+
+### Notes
+
+- This release consolidates the stabilization work shipped across 0.6.0–0.6.3, including the final planned breaking changes of the pre-1.0 line: the internal `$`-prefixed field renames (0.6.0), and the removal of the `Resource.instance` singleton, the multi-Player listener registration API, and the `WebGLRenderContext` singleton (0.6.3). No further breaking changes are planned for the 1.x line.
+
+---
+
+## [0.6.3] — 2026-07-25
+
+### Changed
+
+- **Breaking**: Removed the `Resource.instance` singleton getter (and `_instance` field). Callers should use the existing `export const resource` instance directly. The singleton held a process-wide instance that was awkward to reset between sessions/tests and hid the fact that `Resource` is constructed once at module load.
+- **Breaking**: Removed the multi-Player listener registration API (`DisplayObject.addStructureChangeListener`, `DisplayObject.addRenderableDirtyListener`, `DisplayObjectContainer.addContainerStructureChangeListener`) and restored direct static-field assignment. The engine is single-Player by design — `Player` now assigns `DisplayObject.$onStructureChange` / `$onRenderableDirty` / `DisplayObjectContainer.$onContainerStructureChange` directly in its constructor and clears them in `destroy()`. The previous listener-chain registry existed only to support multiple Player instances on one page, a scenario that was never actually supported and added overhead to every dirty-marking path.
+- **Breaking**: `WebGLRenderContext` is no longer a singleton. Removed `getInstance()` / `resetInstance()` and made the constructor `public`. `Player` now constructs `new WebGLRenderContext(canvas)` directly. On WebGL init failure, references are dropped so the half-constructed context can be GC'd (previously `resetInstance()` had to be called manually).
+
+### Fixed
+
+- **BitmapData**: Fixed a memory leak in the static `_displayList` registry. It was keyed by `bitmapData.hashCode` (a `Map<number, DisplayObject[]>`), so entries for discarded `BitmapData` objects were never removed and kept strong references to both the `BitmapData` and its dependent `DisplayObject`s alive indefinitely. Switched to a `WeakMap<BitmapData, Set<DisplayObject>>` keyed by the `BitmapData` itself, so entries are reclaimed automatically when the `BitmapData` is GC'd. The per-node membership list also moved from `Array` to `Set` for O(1) add/remove.
+- **Event**: `resetForPool()` now clears `this.data` before resetting the event type/bubbles/cancelable. Pooled events previously retained the payload from their last dispatch, leaking arbitrary user data (and strong references to render objects) back into the pool and into the next unrelated dispatch.
+- **TextPipe**: Added `FinalizationRegistry`-based texture cleanup for `TextField` caches. Nothing in the engine calls `destroyRenderable()` during the normal TextField lifecycle (UI relayouts and virtualized lists just drop references), so cached WebGL textures previously leaked — the GC callback is now the actual reclamation path, mirroring `GraphicsPipe`'s existing pattern. `destroyRenderable()` also now immediately unregisters and deletes the texture for use as an optional explicit entry point.
+
+### Added
+
+- **License**: Added an MIT `LICENSE` file at the package root with the copyright notice.
+
+### Tests
+
+- Added a `TextPipe` test suite covering texture caching, cache invalidation, and the destroy/GC path.
+
+---
+
 ## [0.6.2] — 2026-07-24
 
 ### Fixed

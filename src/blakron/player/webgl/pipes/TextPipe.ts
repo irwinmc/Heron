@@ -11,10 +11,11 @@ import type { GL } from '../WebGLUtils.js';
 // ── Texture GC registry ───────────────────────────────────────────────────────
 
 /**
- * When a TextField is GC'd, automatically release its cached WebGL texture.
- * TextFields are frequently created and discarded without an explicit
- * destroyRenderable() call (e.g. UI relayouts, virtualized lists), so this
- * is the primary cleanup path — mirrors GraphicsPipe's texture registry.
+ * GC is the actual cleanup path for cached TextField textures: nothing in the
+ * engine calls destroyRenderable() during normal TextField lifecycle (UI
+ * relayouts, virtualized lists just drop references), so this registry is what
+ * actually reclaims GPU memory. destroyRenderable() remains as an optional
+ * explicit entry for future use. Mirrors GraphicsPipe's pattern.
  */
 const _textureRegistry = new FinalizationRegistry<{ gl: GL; texture: WebGLTexture }>(({ gl, texture }) => {
 	gl.deleteTexture(texture);

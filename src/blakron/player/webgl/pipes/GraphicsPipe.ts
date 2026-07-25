@@ -15,9 +15,11 @@ const _scratchBounds = new Rectangle();
 // ── Texture GC registry ───────────────────────────────────────────────────────
 
 /**
- * When a Graphics object is GC'd, automatically release its WebGL texture.
- * This prevents GPU memory leaks when Shapes are created and discarded without
- * an explicit destroyRenderable() call.
+ * GC is the actual cleanup path for cached Graphics textures: nothing in the
+ * engine calls destroyRenderable() during normal Shape lifecycle (Shapes are
+ * typically just dropped), so this registry is what actually reclaims GPU
+ * memory. destroyRenderable() remains as an optional explicit entry for
+ * future use.
  */
 const _textureRegistry = new FinalizationRegistry<{ gl: GL; texture: WebGLTexture }>(({ gl, texture }) => {
 	gl.deleteTexture(texture);

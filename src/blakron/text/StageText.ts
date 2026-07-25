@@ -161,13 +161,6 @@ export class StageText extends EventDispatcher {
 		this._inputDiv.style.clip = `rect(0px ${inputCSSWidth}px ${tf.height * this._gscaleY}px 0px)`;
 		this._inputDiv.style.width = inputCSSWidth + 'px';
 		this._inputDiv.style.height = tf.height * this._gscaleY + 'px';
-
-		console.log(
-			`[StageText] resetStageText: fontSize=${tf.size * this._gscaleY}px, ` +
-				`inputSize=${el.style.width}×${el.style.height}, ` +
-				`divSize=${inputCSSWidth}×${tf.height * this._gscaleY}, ` +
-				`lineHeight=${el.style.lineHeight}, padding=${el.style.padding}`,
-		);
 	}
 
 	// ── Element lifecycle ────────────────────────────────────────────────────
@@ -228,11 +221,9 @@ export class StageText extends EventDispatcher {
 				this.onTextInput();
 			});
 			el.addEventListener('focus', () => {
-				console.log('[StageText] native focus event');
 				this.dispatchEventWith('focus');
 			});
 			el.addEventListener('blur', () => {
-				console.log('[StageText] native blur event');
 				this.dispatchEventWith('blur');
 				this.clearInputElement();
 			});
@@ -281,15 +272,6 @@ export class StageText extends EventDispatcher {
 
 			left = rect.left + borderLeft + stagePoint.x * scaleX;
 			top = rect.top + borderTop + stagePoint.y * scaleY;
-
-			console.log(
-				`[StageText] initElementPosition:\n` +
-					`  stagePoint=(${stagePoint.x.toFixed(1)}, ${stagePoint.y.toFixed(1)})\n` +
-					`  canvasBufSize=(${canvas.width}, ${canvas.height})\n` +
-					`  canvasClient=(${canvas.clientWidth}, ${canvas.clientHeight}) border=(${borderLeft}, ${borderTop})\n` +
-					`  scale=(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})\n` +
-					`  → viewport=(${left.toFixed(1)}, ${top.toFixed(1)})`,
-			);
 		}
 
 		this._inputDiv.style.left = left + 'px';
@@ -322,17 +304,12 @@ export class StageText extends EventDispatcher {
 		// Reveal the input element
 		el.style.opacity = '1';
 		this._isShowing = true;
-		console.log(
-			`[StageText] executeShow: opacity=1, text="${this._text}", ` +
-				`div.left=${this._inputDiv?.style.left}, div.top=${this._inputDiv?.style.top}`,
-		);
 		// Defer focus to avoid the browser stealing it back during the
 		// current mousedown event processing.
 		setTimeout(() => {
 			if (!this._isShowing || !this._inputElement) return;
 			el.selectionStart = el.value.length;
 			el.selectionEnd = el.value.length;
-			console.log('[StageText] deferred focus()');
 			el.focus();
 		}, 0);
 	}

@@ -1,6 +1,6 @@
 {
 	"name": "@blakron/core",
-	"version": "0.6.3",
+	"version": "1.0.0",
 	"description": "Modern rewrite of the Egret game engine — WebGL multi-texture batching, instruction-driven render pipeline, strict TypeScript, Egret-compatible API",
 	"author": "Kelvin <kyia.x52@gmail.com>",
 	"license": "MIT",
@@ -22,6 +22,7 @@
 		"build:types": "tsc --emitDeclarationOnly --declaration --declarationMap",
 		"dev": "tsc --watch",
 		"clean": "rm -rf dist",
+		"prepublishOnly": "npm run clean && npm run build",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"benchmark": "vite --config vite.config.ts --open /index.html",

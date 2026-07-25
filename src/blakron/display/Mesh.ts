@@ -62,6 +62,4 @@ export class Mesh extends Bitmap {
 		}
 		bounds.copyFrom(this._bounds);
 	}
-
-	// TODO: $updateRenderNode() — implement mesh rendering when renderer layer is available
 }
