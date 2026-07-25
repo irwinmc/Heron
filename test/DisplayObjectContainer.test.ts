@@ -165,7 +165,8 @@ describe('DisplayObjectContainer', () => {
 
 	it('$onContainerStructureChange fires on add/remove', () => {
 		const fn = vi.fn();
-		const unsub = DisplayObjectContainer.addContainerStructureChangeListener(fn);
+		const prev = DisplayObjectContainer.$onContainerStructureChange;
+		DisplayObjectContainer.$onContainerStructureChange = fn;
 		const parent = new DisplayObjectContainer();
 		const child = new DisplayObject();
 		parent.addChild(child);
@@ -173,7 +174,7 @@ describe('DisplayObjectContainer', () => {
 		fn.mockClear();
 		parent.removeChild(child);
 		expect(fn).toHaveBeenCalledWith(parent);
-		unsub();
+		DisplayObjectContainer.$onContainerStructureChange = prev;
 	});
 
 	it('touchChildren getter/setter', () => {

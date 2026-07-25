@@ -36,18 +36,7 @@ export type ResourceEventListener = (event: ResourceEvent) => void;
  * ```
  */
 export class Resource {
-	// ── Singleton ────────────────────────────────────────────────────────────
-
-	private static _instance?: Resource;
-
-	public static get instance(): Resource {
-		if (!Resource._instance) {
-			Resource._instance = new Resource();
-		}
-		return Resource._instance;
-	}
-
-	// ── Instance fields ──────────────────────────────────────────────────────
+	// ── Instance fields ────────────────────────────────────────────────────────
 
 	private config: ResourceConfig = new ResourceConfig();
 	private loader: ResourceLoader = new ResourceLoader();

@@ -162,6 +162,7 @@ export class Event extends HashObject {
 	}
 
 	resetForPool(type: string, bubbles?: boolean, cancelable?: boolean): void {
+	    this.data = undefined;
 		this._type = type;
 		this._bubbles = !!bubbles;
 		this._cancelable = !!cancelable;

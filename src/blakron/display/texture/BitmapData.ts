@@ -14,7 +14,7 @@ export class CompressedTextureData {
 export class BitmapData extends HashObject {
 	// ── Static fields ─────────────────────────────────────────────────────────
 
-	private static _displayList = new Map<number, DisplayObject[]>();
+	private static _displayList = new WeakMap<BitmapData, Set<DisplayObject>>();
 
 	// ── Static methods ────────────────────────────────────────────────────────
 
@@ -55,39 +55,26 @@ export class BitmapData extends HashObject {
 		if (!bitmapData) {
 			return;
 		}
-		const { hashCode } = bitmapData;
-		if (!hashCode) {
-			return;
-		}
-		const list = BitmapData._displayList.get(hashCode);
+		let list = BitmapData._displayList.get(bitmapData);
 		if (!list) {
-			BitmapData._displayList.set(hashCode, [displayObject]);
-			return;
+			list = new Set<DisplayObject>();
+			BitmapData._displayList.set(bitmapData, list);
 		}
-		if (!list.includes(displayObject)) {
-			list.push(displayObject);
-		}
+		list.add(displayObject);
 	}
 
 	static removeDisplayObject(displayObject: DisplayObject, bitmapData: BitmapData | undefined): void {
 		if (!bitmapData) {
 			return;
 		}
-		const list = BitmapData._displayList.get(bitmapData.hashCode);
-		if (!list) {
-			return;
-		}
-		const i = list.indexOf(displayObject);
-		if (i >= 0) {
-			list.splice(i, 1);
-		}
+		BitmapData._displayList.get(bitmapData)?.delete(displayObject);
 	}
 
 	static invalidate(bitmapData: BitmapData | undefined): void {
 		if (!bitmapData) {
 			return;
 		}
-		const list = BitmapData._displayList.get(bitmapData.hashCode);
+		const list = BitmapData._displayList.get(bitmapData);
 		if (!list) {
 			return;
 		}
@@ -101,7 +88,7 @@ export class BitmapData extends HashObject {
 		if (!bitmapData) {
 			return;
 		}
-		const list = BitmapData._displayList.get(bitmapData.hashCode);
+		const list = BitmapData._displayList.get(bitmapData);
 		if (!list) {
 			return;
 		}
@@ -109,7 +96,7 @@ export class BitmapData extends HashObject {
 			node.$renderDirty = true;
 			node.$markDirty();
 		}
-		BitmapData._displayList.delete(bitmapData.hashCode);
+		BitmapData._displayList.delete(bitmapData);
 	}
 
 	// ── Instance fields ───────────────────────────────────────────────────────

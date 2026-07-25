@@ -113,20 +113,22 @@ describe('DisplayObject', () => {
 
 	it('$onRenderableDirty callback is called', () => {
 		const fn = vi.fn();
-		const unsub = DisplayObject.addRenderableDirtyListener(fn);
+		const prev = DisplayObject.$onRenderableDirty;
+		DisplayObject.$onRenderableDirty = fn;
 		const obj = new DisplayObject();
 		obj.x = 99;
 		expect(fn).toHaveBeenCalledWith(obj);
-		unsub();
+		DisplayObject.$onRenderableDirty = prev;
 	});
 
 	it('$onStructureChange callback is called on $renderMode change', () => {
 		const fn = vi.fn();
-		const unsub = DisplayObject.addStructureChangeListener(fn);
+		const prev = DisplayObject.$onStructureChange;
+		DisplayObject.$onStructureChange = fn;
 		const obj = new DisplayObject();
 		obj.visible = false;
 		expect(fn).toHaveBeenCalled();
-		unsub();
+		DisplayObject.$onStructureChange = prev;
 	});
 
 	it('scrollRect', () => {

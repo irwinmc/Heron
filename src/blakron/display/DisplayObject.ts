@@ -53,6 +53,9 @@ export class DisplayObject extends EventDispatcher {
 	 * @internal
 	 * Injected by Player at startup. Called when $renderMode changes (visible,
 	 * filters, mask, blendMode) so the WebGLRenderer can mark its InstructionSet dirty.
+	 *
+	 * Single-Player engine: Player assigns this directly in its constructor and
+	 * clears it in `destroy()`. There is intentionally no registration API.
 	 */
 	static $onStructureChange?: () => void;
 
@@ -62,52 +65,12 @@ export class DisplayObject extends EventDispatcher {
 	 * changes (position, texture, alpha, tint) but the scene structure is unchanged.
 	 * The renderer uses this to update the transform snapshot in the InstructionSet
 	 * without doing a full rebuild.
+	 *
+	 * Single-Player engine: Player assigns this directly in its constructor and
+	 * clears it in `destroy()`. There is intentionally no registration API.
 	 */
 	static $onRenderableDirty?: (obj: DisplayObject) => void;
 
-	/**
-	 * @internal Register a structure-change listener. Returns an unregister function.
-	 * Using a registration pattern instead of a single static field supports
-	 * multiple Player instances on the same page.
-	 */
-	static addStructureChangeListener(fn: () => void): () => void {
-		const prev = DisplayObject.$onStructureChange;
-		if (!prev) {
-			DisplayObject.$onStructureChange = fn;
-		} else {
-			DisplayObject.$onStructureChange = () => {
-				prev();
-				fn();
-			};
-		}
-		return () => {
-			// Simple removal: if only one listener, clear; otherwise rebuild chain.
-			// For the common single-player case this is zero overhead.
-			if (DisplayObject.$onStructureChange === fn) {
-				DisplayObject.$onStructureChange = undefined;
-			}
-		};
-	}
-
-	/**
-	 * @internal Register a renderable-dirty listener. Returns an unregister function.
-	 */
-	static addRenderableDirtyListener(fn: (obj: DisplayObject) => void): () => void {
-		const prev = DisplayObject.$onRenderableDirty;
-		if (!prev) {
-			DisplayObject.$onRenderableDirty = fn;
-		} else {
-			DisplayObject.$onRenderableDirty = obj => {
-				prev(obj);
-				fn(obj);
-			};
-		}
-		return () => {
-			if (DisplayObject.$onRenderableDirty === fn) {
-				DisplayObject.$onRenderableDirty = undefined;
-			}
-		};
-	}
 
 	// ── Instance fields ───────────────────────────────────────────────────────
 

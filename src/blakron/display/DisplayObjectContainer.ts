@@ -357,26 +357,12 @@ export class DisplayObjectContainer extends DisplayObject {
 	 * or reordered so the WebGLRenderer can mark its InstructionSet as dirty.
 	 * The `owner` argument is the container that changed — used to route the
 	 * dirty signal to a RenderGroup's set when applicable.
+	 *
+	 * Single-Player engine: Player assigns this directly in its constructor and
+	 * clears it in `destroy()`. There is intentionally no registration API.
 	 */
 	static $onContainerStructureChange?: (owner: DisplayObjectContainer) => void;
 
-	/** @internal Register a structure-change listener. Returns an unregister function. */
-	static addContainerStructureChangeListener(fn: (owner: DisplayObjectContainer) => void): () => void {
-		const prev = DisplayObjectContainer.$onContainerStructureChange;
-		if (!prev) {
-			DisplayObjectContainer.$onContainerStructureChange = fn;
-		} else {
-			DisplayObjectContainer.$onContainerStructureChange = owner => {
-				prev(owner);
-				fn(owner);
-			};
-		}
-		return () => {
-			if (DisplayObjectContainer.$onContainerStructureChange === fn) {
-				DisplayObjectContainer.$onContainerStructureChange = undefined;
-			}
-		};
-	}
 
 	private sortChildrenFunc(a: DisplayObject, b: DisplayObject): number {
 		if (a.zIndex === b.zIndex) {

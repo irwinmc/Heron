@@ -16,19 +16,6 @@ import type { WebGLRenderBuffer } from './WebGLRenderBuffer.js';
 import { MultiTextureBatcher, makeMultiCmd, type MultiTextureDrawCmd } from './MultiTextureBatcher.js';
 
 export class WebGLRenderContext {
-	// ── Static fields ─────────────────────────────────────────────────────────
-
-	private static _instance?: WebGLRenderContext;
-
-	public static getInstance(canvas: HTMLCanvasElement): WebGLRenderContext {
-		if (!this._instance) this._instance = new WebGLRenderContext(canvas);
-		return this._instance;
-	}
-
-	public static resetInstance(): void {
-		this._instance = undefined;
-	}
-
 	// ── Public readonly fields ────────────────────────────────────────────────
 
 	public readonly gl: GL;
@@ -72,7 +59,9 @@ export class WebGLRenderContext {
 	// Key: "${width}x${height}", Value: stack of reusable { texture, fbo } pairs.
 	private readonly _blurFboPool = new Map<string, Array<{ texture: WebGLTexture; fbo: WebGLFramebuffer }>>();
 
-	private constructor(canvas: HTMLCanvasElement) {
+	// Public so Player can construct it. The engine is single-Player by
+	// design; there is intentionally no getInstance() singleton.
+	public constructor(canvas: HTMLCanvasElement) {
 		this.surface = canvas;
 
 		// Prefer WebGL2 with GLSL ES 3.00 shaders.
@@ -140,7 +129,7 @@ export class WebGLRenderContext {
 	// ── Getter ────────────────────────────────────────────────────────────────
 
 	/**
-	 * Register a callback to be invoked after the WebGL context is restored.
+	 * Register a callback invoked after the WebGL context is restored.
 	 * Returns an unregister function.
 	 */
 	public addContextRestoredListener(fn: () => void): () => void {
