@@ -114,6 +114,16 @@ export class WebGLRenderer {
 	private readonly _renderGroupSets = new WeakMap<DisplayObjectContainer, InstructionSet>();
 	private readonly _renderGroupSetList: Array<WeakRef<DisplayObjectContainer>> = [];
 
+	// Tracks recursive render() depth. Currently render() is never called
+	// recursively (cacheAsBitmap uses an instruction-based path, RenderTexture
+	// uses CanvasRenderer), so this stays at 0 on entry / exit. The guard below
+	// (`if (this._nestLevel === 0)`) therefore fires on every render today.
+	// Kept so that a future WebGL cacheAsBitmap / drawToTexture that recurses
+	// through render() will only restore the root projection on the outermost
+	// call — restoring it on an inner call would corrupt the in-flight
+	// offscreen pass. DO NOT remove even though it looks unused.
+	private _nestLevel = 0;
+
 	public constructor() {
 		this._bitmapPipe = new BitmapPipe();
 		this._graphicsPipe = new GraphicsPipe(this._canvasRenderer);
@@ -153,6 +163,7 @@ export class WebGLRenderer {
 	 * otherwise patches dirty renderables in place, then executes.
 	 */
 	public render(displayObject: DisplayObject, buffer: WebGLRenderBuffer, matrix: Matrix): number {
+		this._nestLevel++;
 		const ctx = buffer.context;
 		ctx.pushBuffer(buffer);
 
@@ -189,15 +200,23 @@ export class WebGLRenderer {
 		// Root $renderDirty is consumed after a full render pass.
 		displayObject.$renderDirty = false;
 
-		// Restore the root buffer's projection/viewport for the next frame.
-		// During a frame, activating an offscreen buffer (filter / mask /
-		// cacheAsBitmap) changes the GL projection to that buffer's size.
-		// Without restoring it here, the next frame renders with a stale
-		// projection and the output is vertically offset.
-		// create()+release() cycles a scratch buffer through the pool, but its
-		// real effect is the pushBuffer/popBuffer pair inside resize(), which
-		// queues an activateBuffer command that re-runs onResize() on flush.
-		WebGLRenderBuffer.release(WebGLRenderBuffer.create(buffer.context, 0, 0));
+		this._nestLevel--;
+		// Only the outermost render() restores the root buffer's projection /
+		// viewport. See _nestLevel comment for why this guard exists despite
+		// render() currently never recursing.
+		//
+		// What this call actually does: create()+release() cycles a scratch
+		// buffer through the pool, but its real effect is the pushBuffer /
+		// popBuffer pair inside WebGLRenderBuffer.resize(). That queues an
+		// activateBuffer command which, when flush() runs it, calls
+		// _activateBuffer() → onResize(), resetting the GL projection/viewport
+		// to the root canvas size. Without this, an in-frame offscreen buffer
+		// activation (filter / mask / cacheAsBitmap) leaves the projection set
+		// to the offscreen size, and the next frame's output is vertically
+		// offset. DO NOT delete as dead code — it is not dead.
+		if (this._nestLevel === 0) {
+			WebGLRenderBuffer.release(WebGLRenderBuffer.create(buffer.context, 0, 0));
+		}
 		return drawCalls;
 	}
 
