@@ -1,4 +1,3 @@
-import { HashObject } from '../utils/HashObject.js';
 import { Matrix } from '../geom/Matrix.js';
 import { Point } from '../geom/Point.js';
 import { Rectangle } from '../geom/Rectangle.js';
@@ -46,7 +45,7 @@ function createBezierPoints(data: number[], count: number): Point[] {
 	return points;
 }
 
-export class Graphics extends HashObject {
+export class Graphics {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
 	targetDisplay?: DisplayObject;

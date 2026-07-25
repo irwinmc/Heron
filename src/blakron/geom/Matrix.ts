@@ -1,4 +1,3 @@
-import { HashObject } from '../utils/HashObject.js';
 import { NumberUtils } from '../utils/NumberUtils.js';
 import { Point } from './Point.js';
 import { Rectangle } from './Rectangle.js';
@@ -7,7 +6,7 @@ const DEG_TO_RAD = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
 const matrixPool: Matrix[] = [];
 
-export class Matrix extends HashObject {
+export class Matrix {
 	// ── Static methods ────────────────────────────────────────────────────────
 
 	public static create(): Matrix {
@@ -30,7 +29,6 @@ export class Matrix extends HashObject {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	public constructor(a = 1, b = 0, c = 0, d = 1, tx = 0, ty = 0) {
-		super();
 		this.a = a;
 		this.b = b;
 		this.c = c;

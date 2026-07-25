@@ -1,7 +1,5 @@
-import { HashObject } from '../utils/HashObject.js';
-
-export class Filter extends HashObject {
-	// ── Instance fields ───────────────────────────────────────────────────────
+export class Filter {
+	// ── Instance fields ─────────────────────────────────────────────────────
 
 	public type = '';
 
@@ -11,12 +9,6 @@ export class Filter extends HashObject {
 	protected paddingBottom = 0;
 	protected paddingLeft = 0;
 	protected paddingRight = 0;
-
-	// ── Constructor ───────────────────────────────────────────────────────────
-
-	public constructor() {
-		super();
-	}
 
 	// ── Public methods ────────────────────────────────────────────────────────
 

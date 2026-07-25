@@ -1,9 +1,8 @@
-import { HashObject } from '../utils/HashObject.js';
 import { Point } from './Point.js';
 
 const rectanglePool: Rectangle[] = [];
 
-export class Rectangle extends HashObject {
+export class Rectangle {
 	// ── Static methods ────────────────────────────────────────────────────────
 
 	public static create(): Rectangle {
@@ -24,7 +23,6 @@ export class Rectangle extends HashObject {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	public constructor(x = 0, y = 0, width = 0, height = 0) {
-		super();
 		this.x = x;
 		this.y = y;
 		this.width = width;

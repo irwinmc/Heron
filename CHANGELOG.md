@@ -12,13 +12,17 @@ First stable release. From this version forward the public API surface (exports 
 
 - **StageText**: Removed 6 development-time `console.log` debug statements (in `resetStageText`, the focus/blur listeners, `initElementPosition`, `executeShow`, and the deferred-focus path) that would spam the console of any production app using text inputs. These were not routed through `Logger` and could not be silenced.
 
+### Removed
+
+- **HashObject / IHashObject / `.hashCode`**: Removed entirely. This was a 2014-era port of Java's `Object.hashCode()` identity-comparison pattern, introduced because ES5 had no `Map`/`WeakMap`. With modern JS, object identity comparison is done with `===` and object-keyed lookups with `WeakMap`/`WeakSet` — neither needs an int ID. The last engine-internal consumer (BitmapData's `Map<number, DisplayObject[]>`) was already migrated to a `WeakMap` in 0.6.3, and a full audit found zero remaining reads of `.hashCode` across `src/`, `test/`, and `examples/`. Removing it drops a per-instance field + global counter increment from every `Point`/`Matrix`/`Rectangle`/`Texture`/`BitmapData`/`SpriteSheet`/`Graphics`/`Event`/`EventDispatcher`/`Filter`. **Breaking for any user code that read `.hashCode`** — replace with `WeakMap`-keyed or `===`-based identity.
+
 ### Build
 
 - **package.json**: Added a `prepublishOnly` hook (`npm run clean && npm run build`) so `npm publish` always ships a freshly built `dist/`. `dist/` is gitignored, so without this hook publishing from a fresh clone or CI would emit an empty package.
 
 ### Notes
 
-- This release consolidates the stabilization work shipped across 0.6.0–0.6.3, including the final planned breaking changes of the pre-1.0 line: the internal `$`-prefixed field renames (0.6.0), and the removal of the `Resource.instance` singleton, the multi-Player listener registration API, and the `WebGLRenderContext` singleton (0.6.3). No further breaking changes are planned for the 1.x line.
+- This release consolidates the stabilization work shipped across 0.6.0–0.6.3, including the final planned breaking changes of the pre-1.0 line: the internal `$`-prefixed field renames (0.6.0), the removal of the `Resource.instance` singleton, the multi-Player listener registration API, and the `WebGLRenderContext` singleton (0.6.3), and the removal of the Java-era `HashObject` / `.hashCode` identity layer (1.0.0). No further breaking changes are planned for the 1.x line.
 
 ---
 

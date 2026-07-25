@@ -1,4 +1,3 @@
-import { HashObject } from '../utils/HashObject.js';
 import { Event } from './Event.js';
 import { EventPhase } from './EventPhase.js';
 import type { IEventDispatcher } from './IEventDispatcher.js';
@@ -11,7 +10,7 @@ interface EventBin {
 	once: boolean;
 }
 
-export class EventDispatcher extends HashObject implements IEventDispatcher {
+export class EventDispatcher implements IEventDispatcher {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
 	private _target: IEventDispatcher;
@@ -22,7 +21,6 @@ export class EventDispatcher extends HashObject implements IEventDispatcher {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	public constructor(target?: IEventDispatcher) {
-		super();
 		this._target = target ?? this;
 		this._listeners = new Map();
 		this._captureListeners = new Map();

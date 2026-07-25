@@ -1,7 +1,6 @@
-import type { IHashObject } from '../utils/HashObject.js';
 import type { Event } from './Event.js';
 
-export interface IEventDispatcher extends IHashObject {
+export interface IEventDispatcher {
 	addEventListener(type: string, listener: (event: Event) => void, useCapture?: boolean, priority?: number): void;
 	once(type: string, listener: (event: Event) => void, useCapture?: boolean, priority?: number): void;
 	removeEventListener(type: string, listener: (event: Event) => void, useCapture?: boolean): void;

@@ -1,4 +1,3 @@
-import { HashObject } from '../../utils/HashObject.js';
 import { Base64Util } from '../../utils/Base64Util.js';
 import type { DisplayObject } from '../DisplayObject.js';
 
@@ -11,7 +10,7 @@ export class CompressedTextureData {
 	level = 0;
 }
 
-export class BitmapData extends HashObject {
+export class BitmapData {
 	// ── Static fields ─────────────────────────────────────────────────────────
 
 	private static _displayList = new WeakMap<BitmapData, Set<DisplayObject>>();
@@ -115,7 +114,6 @@ export class BitmapData extends HashObject {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	public constructor(source?: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement | ArrayBuffer) {
-		super();
 		if (source) {
 			this._source = source;
 			if (!(source instanceof ArrayBuffer)) {

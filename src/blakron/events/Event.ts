@@ -1,4 +1,3 @@
-import { HashObject } from '../utils/HashObject.js';
 import { EventPhase } from './EventPhase.js';
 import type { IEventDispatcher } from './IEventDispatcher.js';
 
@@ -15,7 +14,7 @@ function getPool<T extends Event>(EventClass: EventConstructor<T>): T[] {
 	return pool;
 }
 
-export class Event extends HashObject {
+export class Event {
 	// ── Static constants ──────────────────────────────────────────────────────
 
 	static readonly ADDED_TO_STAGE = 'addedToStage';
@@ -86,7 +85,6 @@ export class Event extends HashObject {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	public constructor(type: string, bubbles?: boolean, cancelable?: boolean, data?: unknown) {
-		super();
 		this._type = type;
 		this._bubbles = !!bubbles;
 		this._cancelable = !!cancelable;

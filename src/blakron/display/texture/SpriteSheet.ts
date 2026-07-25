@@ -1,7 +1,6 @@
-import { HashObject } from '../../utils/HashObject.js';
 import { Texture } from './Texture.js';
 
-export class SpriteSheet extends HashObject {
+export class SpriteSheet {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
 	private _texture: Texture;
@@ -12,7 +11,6 @@ export class SpriteSheet extends HashObject {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	public constructor(texture: Texture) {
-		super();
 		this._texture = texture;
 		this._bitmapX = texture.bitmapX - texture.offsetX;
 		this._bitmapY = texture.bitmapY - texture.offsetY;

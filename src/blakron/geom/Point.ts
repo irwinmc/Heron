@@ -1,9 +1,8 @@
-import { HashObject } from '../utils/HashObject.js';
 import { NumberUtils } from '../utils/NumberUtils.js';
 
 const pointPool: Point[] = [];
 
-export class Point extends HashObject {
+export class Point {
 	// ── Static methods ────────────────────────────────────────────────────────
 
 	public static create(x: number, y: number): Point {
@@ -36,7 +35,6 @@ export class Point extends HashObject {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	public constructor(x = 0, y = 0) {
-		super();
 		this.x = x;
 		this.y = y;
 	}

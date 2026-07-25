@@ -6,7 +6,6 @@ import { DisplayObject } from '../src/blakron/display/DisplayObject.js';
 
 function mockDisplayObject(): DisplayObject {
 	const obj = new DisplayObject();
-	// Ensure hashCode is set (HashObject base class)
 	return obj;
 }
 

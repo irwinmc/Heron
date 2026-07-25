@@ -1,10 +1,9 @@
-import { HashObject } from '../../utils/HashObject.js';
 import { Rectangle } from '../../geom/Rectangle.js';
 import { BitmapData } from './BitmapData.js';
 
 export let textureScaleFactor = 1;
 
-export class Texture extends HashObject {
+export class Texture {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
 	bitmapX = 0;
