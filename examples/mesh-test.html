@@ -382,6 +382,52 @@
 				return { vertices: verts, uvs, indices: idx };
 			}
 
+			// Densified fan (polar grid) for animation. The sparse fan has only
+			// a center vertex plus one boundary ring, so every boundary vertex is
+			// at the same distance from center — ripple degenerates to uniform
+			// scale and twist to pure rotation. Adding concentric inner rings
+			// gives vertices at different radii so both animations can manifest.
+			// Outline (outer ring) is unchanged. Pure.
+			function fanDenseShape(n = 8, rings = 6) {
+				const cx = W / 2,
+					cy = H / 2,
+					r = W / 2;
+				const verts = [],
+					uvs = [],
+					idx = [];
+				// Center vertex (index 0)
+				verts.push(cx, cy);
+				uvs.push(0.5, 0.5);
+				// ringStart[k] = vertex index where ring k begins.
+				// Ring 0 is the center (single vertex at index 0).
+				const ringStart = [0];
+				for (let ring = 1; ring <= rings; ring++) {
+					ringStart.push(verts.length / 2);
+					const ringR = (ring / rings) * r;
+					for (let i = 0; i <= n; i++) {
+						const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+						const f = ring / rings;
+						verts.push(cx + Math.cos(a) * ringR, cy + Math.sin(a) * ringR);
+						uvs.push(0.5 + Math.cos(a) * 0.5 * f, 0.5 + Math.sin(a) * 0.5 * f);
+					}
+				}
+				// Triangulate center → ring 1 as a fan.
+				const r1 = ringStart[1];
+				for (let i = 0; i < n; i++) {
+					idx.push(0, r1 + i, r1 + i + 1);
+				}
+				// Triangulate between adjacent rings as split quads.
+				for (let ring = 1; ring < rings; ring++) {
+					const inner = ringStart[ring],
+						outer = ringStart[ring + 1];
+					for (let i = 0; i < n; i++) {
+						idx.push(inner + i, outer + i, outer + i + 1);
+						idx.push(inner + i, outer + i + 1, inner + i + 1);
+					}
+				}
+				return { vertices: verts, uvs, indices: idx };
+			}
+
 			// ── Animation state ───────────────────────────────────────────────
 			// `presetShape` holds the currently-selected preset's clean shape
 			// (sparse). Animations read from a (possibly densified) copy of this
@@ -398,13 +444,16 @@
 			// wave degenerates to rigid up-down bobbing (both top verts share the
 			// same phase since the wave period equals W), ripple degenerates to
 			// uniform scale (all corners are equidistant from the center), and
-			// twist degenerates to pure rotation (same reason). Subdividing
-			// preserves the outline shape while giving the animation something
-			// to act on. Returns null for presets that already have enough
-			// vertices (fan/grid/strip).
+			// twist degenerates to pure rotation (same reason). A sparse fan has
+			// the same problem: every boundary vertex is equidistant from the
+			// center, so ripple scales uniformly and twist rotates rigidly.
+			// Subdividing preserves the outline shape while giving the animation
+			// something to act on. Returns null for presets that already have
+			// enough internal vertices (grid/strip).
 			function denseShapeFor(preset) {
 				if (preset === 'quad') return gridShape(8, 8);
 				if (preset === 'triangle') return triangleDenseShape(16);
+				if (preset === 'fan') return fanDenseShape(8, 6);
 				return null;
 			}
 
