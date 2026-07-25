@@ -11,6 +11,7 @@ First stable release. From this version forward the public API surface (exports 
 ### Fixed
 
 - **StageText**: Removed 6 development-time `console.log` debug statements (in `resetStageText`, the focus/blur listeners, `initElementPosition`, `executeShow`, and the deferred-focus path) that would spam the console of any production app using text inputs. These were not routed through `Logger` and could not be silenced.
+- **WebGLRenderer**: Documented and preserved the per-frame root-buffer projection reset at the end of `render()`. The call `WebGLRenderBuffer.release(WebGLRenderBuffer.create(buffer.context, 0, 0))` looks like a no-op pool cycle but its real effect is the `pushBuffer` / `popBuffer` pair inside `WebGLRenderBuffer.resize()`, which queues an `activateBuffer` command; when `flush()` runs it, `_activateBuffer()` calls `onResize()` and restores the GL projection / viewport to the root canvas size. Without it, any in-frame activation of an offscreen buffer (filters / masks / cacheAsBitmap) leaves the projection set to the offscreen size and the next frame is vertically offset (observed as text and mesh content rendering halfway down the canvas instead of at its set position). The `_nestLevel` guard around it is also preserved with a `DO NOT remove` comment: although `render()` never recurses today, the guard ensures a future WebGL cacheAsBitmap / drawToTexture will only reset the projection on the outermost call. Both pieces were briefly deleted as "dead code" during the 1.0.0 cleanup and immediately reverted after the regression was caught.
 
 ### Removed
 
@@ -27,9 +28,15 @@ First stable release. From this version forward the public API surface (exports 
 
 - **package.json**: Added a `prepublishOnly` hook (`npm run clean && npm run build`) so `npm publish` always ships a freshly built `dist/`. `dist/` is gitignored, so without this hook publishing from a fresh clone or CI would emit an empty package.
 
+### Docs
+
+- **README**: Added a stable (1.0.0) badge and an explicit evergreen-browsers-only targeting note. Added a "Migrating from Egret" section listing every 1.0.0 breaking change (`.hashCode`/`HashObject` removal, `Resource.instance` removal, multi-Player listener API removal, `WebGLRenderContext` singleton removal, `$`-prefixed internal fields, vendor-prefix shim removal). Fixed the test count (569 → 565). Replaced the dead `docs/architecture.md` and `docs/resource.md` links (those files were gitignored, never committed, never published) with the in-package `CHANGELOG.md` and the public demo URL.
+- **CORE_REVIEW.md → docs/core-review.md**: Moved out of the published tree (`docs/` is gitignored). This file is an internal review/backlog artifact and was never meant for public consumption.
+
 ### Notes
 
 - This release consolidates the stabilization work shipped across 0.6.0–0.6.3, plus a final pass removing 2014-era browser-compatibility shims now that the engine targets modern browsers (ES2022 / evergreen browsers only): the internal `$`-prefixed field renames (0.6.0), the removal of the `Resource.instance` singleton, the multi-Player listener registration API, and the `WebGLRenderContext` singleton (0.6.3), the removal of the Java-era `HashObject` / `.hashCode` identity layer (1.0.0), and the removal of dead vendor-prefix fallbacks (`experimental-webgl`, `webkitAudioContext`, `webkit/moz fullscreen`, hand-rolled base64). No further breaking changes are planned for the 1.x line.
+- The 1.0.0 cleanup was iterated against the local `reference/pixijs/pixijs-8.17.1` source to confirm the direction matches what a modern TypeScript game engine actually ships (no `experimental-webgl` fallback, no `webkitAudioContext`, no `HashObject` identity layer).
 
 ---
 
