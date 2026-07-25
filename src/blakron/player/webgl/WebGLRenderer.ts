@@ -114,9 +114,6 @@ export class WebGLRenderer {
 	private readonly _renderGroupSets = new WeakMap<DisplayObjectContainer, InstructionSet>();
 	private readonly _renderGroupSetList: Array<WeakRef<DisplayObjectContainer>> = [];
 
-	// ── Nesting (for recursive offscreen renders, e.g. cacheAsBitmap) ────────
-	private _nestLevel = 0;
-
 	public constructor() {
 		this._bitmapPipe = new BitmapPipe();
 		this._graphicsPipe = new GraphicsPipe(this._canvasRenderer);
@@ -156,7 +153,6 @@ export class WebGLRenderer {
 	 * otherwise patches dirty renderables in place, then executes.
 	 */
 	public render(displayObject: DisplayObject, buffer: WebGLRenderBuffer, matrix: Matrix): number {
-		this._nestLevel++;
 		const ctx = buffer.context;
 		ctx.pushBuffer(buffer);
 
@@ -193,10 +189,15 @@ export class WebGLRenderer {
 		// Root $renderDirty is consumed after a full render pass.
 		displayObject.$renderDirty = false;
 
-		this._nestLevel--;
-		if (this._nestLevel === 0) {
-			WebGLRenderBuffer.release(WebGLRenderBuffer.create(buffer.context, 0, 0));
-		}
+		// Restore the root buffer's projection/viewport for the next frame.
+		// During a frame, activating an offscreen buffer (filter / mask /
+		// cacheAsBitmap) changes the GL projection to that buffer's size.
+		// Without restoring it here, the next frame renders with a stale
+		// projection and the output is vertically offset.
+		// create()+release() cycles a scratch buffer through the pool, but its
+		// real effect is the pushBuffer/popBuffer pair inside resize(), which
+		// queues an activateBuffer command that re-runs onResize() on flush.
+		WebGLRenderBuffer.release(WebGLRenderBuffer.create(buffer.context, 0, 0));
 		return drawCalls;
 	}
 
