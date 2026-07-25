@@ -16,9 +16,7 @@ let sharedContext: AudioContext | undefined;
 function getAudioContext(): AudioContext | undefined {
 	if (sharedContext) return sharedContext;
 	try {
-		sharedContext = new (
-			window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-		)();
+		sharedContext = new AudioContext();
 		return sharedContext;
 	} catch {
 		return undefined;

@@ -197,22 +197,13 @@ export class Video extends DisplayObject {
 		// Append to body so fullscreen API works
 		if (!video.parentElement) document.body.appendChild(video);
 
-		const req =
-			(video as unknown as Record<string, unknown>)['requestFullscreen'] ??
-			(video as unknown as Record<string, unknown>)['webkitRequestFullscreen'] ??
-			(video as unknown as Record<string, unknown>)['mozRequestFullScreen'];
-
-		if (typeof req === 'function') {
-			(req as () => void).call(video);
-		}
+		void video.requestFullscreen();
 
 		this.videoPlay();
 	}
 
 	private exitFullscreen(): void {
-		const doc = document as unknown as Record<string, unknown>;
-		const exit = doc['exitFullscreen'] ?? doc['webkitExitFullscreen'] ?? doc['mozCancelFullScreen'];
-		if (typeof exit === 'function') (exit as () => void).call(document);
+		if (document.fullscreenElement) void document.exitFullscreen();
 
 		if (this._video.parentElement) {
 			this._video.parentElement.removeChild(this._video);

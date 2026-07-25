@@ -16,13 +16,20 @@ First stable release. From this version forward the public API surface (exports 
 
 - **HashObject / IHashObject / `.hashCode`**: Removed entirely. This was a 2014-era port of Java's `Object.hashCode()` identity-comparison pattern, introduced because ES5 had no `Map`/`WeakMap`. With modern JS, object identity comparison is done with `===` and object-keyed lookups with `WeakMap`/`WeakSet` — neither needs an int ID. The last engine-internal consumer (BitmapData's `Map<number, DisplayObject[]>`) was already migrated to a `WeakMap` in 0.6.3, and a full audit found zero remaining reads of `.hashCode` across `src/`, `test/`, and `examples/`. Removing it drops a per-instance field + global counter increment from every `Point`/`Matrix`/`Rectangle`/`Texture`/`BitmapData`/`SpriteSheet`/`Graphics`/`Event`/`EventDispatcher`/`Filter`. **Breaking for any user code that read `.hashCode`** — replace with `WeakMap`-keyed or `===`-based identity.
 
+### Changed
+
+- **WebGL**: Removed the `experimental-webgl` context fallback in `WebGLRenderContext` and `checkWebGLSupport()`. The `experimental-webgl` name was the IE11 / early-Safari / old-Android-Chrome alias; every modern browser that supports WebGL returns the standard `'webgl'` context (Safari 8+ since 2014). Also dropped the redundant `window.WebGL2RenderingContext` / `window.WebGLRenderingContext` feature-detects — `getContext('webgl2')` / `getContext('webgl')` already return `null` when unsupported.
+- **Sound**: Removed the `webkitAudioContext` fallback. Prefixed `AudioContext` was last used by Safari <14.1 (2021); standard `AudioContext` is universally supported now.
+- **Video**: Replaced the `requestFullscreen` / `exitFullscreen` vendor-prefix dispatchers (`webkitRequestFullscreen`, `mozRequestFullScreen`, `webkitExitFullscreen`, `mozCancelFullScreen`) with native `requestFullscreen()` / `exitFullscreen()`. The unprefixed API has been standard in every browser since 2018.
+- **Base64Util**: Replaced the hand-rolled base64 bit-twiddling with native `btoa` / `atob`. The custom implementation was an ES5-era workaround for old IE; `btoa`/`atob` are universally supported since 2014. The chunked `String.fromCharCode` loop preserves performance on large buffers.
+
 ### Build
 
 - **package.json**: Added a `prepublishOnly` hook (`npm run clean && npm run build`) so `npm publish` always ships a freshly built `dist/`. `dist/` is gitignored, so without this hook publishing from a fresh clone or CI would emit an empty package.
 
 ### Notes
 
-- This release consolidates the stabilization work shipped across 0.6.0–0.6.3, including the final planned breaking changes of the pre-1.0 line: the internal `$`-prefixed field renames (0.6.0), the removal of the `Resource.instance` singleton, the multi-Player listener registration API, and the `WebGLRenderContext` singleton (0.6.3), and the removal of the Java-era `HashObject` / `.hashCode` identity layer (1.0.0). No further breaking changes are planned for the 1.x line.
+- This release consolidates the stabilization work shipped across 0.6.0–0.6.3, plus a final pass removing 2014-era browser-compatibility shims now that the engine targets modern browsers (ES2022 / evergreen browsers only): the internal `$`-prefixed field renames (0.6.0), the removal of the `Resource.instance` singleton, the multi-Player listener registration API, and the `WebGLRenderContext` singleton (0.6.3), the removal of the Java-era `HashObject` / `.hashCode` identity layer (1.0.0), and the removal of dead vendor-prefix fallbacks (`experimental-webgl`, `webkitAudioContext`, `webkit/moz fullscreen`, hand-rolled base64). No further breaking changes are planned for the 1.x line.
 
 ---
 

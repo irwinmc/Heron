@@ -65,7 +65,7 @@ export class WebGLRenderContext {
 		this.surface = canvas;
 
 		// Prefer WebGL2 with GLSL ES 3.00 shaders.
-		// Fall back to WebGL1 / experimental-webgl for older devices.
+		// Fall back to WebGL1 for older devices.
 		const gl2 = canvas.getContext('webgl2') as WebGL2RenderingContext | null;
 		if (gl2) {
 			this.gl = gl2;
@@ -75,8 +75,7 @@ export class WebGLRenderContext {
 			this.makeBlurH = makeBlurHFrag2;
 			this.makeBlurV = makeBlurVFrag2;
 		} else {
-			const gl1 = (canvas.getContext('webgl') ??
-				canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null;
+			const gl1 = canvas.getContext('webgl') as WebGLRenderingContext | null;
 			if (!gl1) throw new Error('WebGL not supported');
 			this.gl = gl1;
 			this.isWebGL2 = false;

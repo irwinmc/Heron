@@ -54,10 +54,7 @@ export function premultiplyTint(tint: number, alpha: number): number {
 export function checkWebGLSupport(): boolean {
 	try {
 		const canvas = document.createElement('canvas');
-		return !!(
-			(window.WebGL2RenderingContext && canvas.getContext('webgl2')) ||
-			(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')))
-		);
+		return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
 	} catch {
 		return false;
 	}
