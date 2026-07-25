@@ -264,6 +264,11 @@
 			mesh.anchorOffsetY = 128;
 			root.addChild(mesh);
 
+			let cleanVertices = [];
+			let animMode = null;
+			let animT = 0;
+			let baseVertices = [];
+
 			// ── Preset builders ───────────────────────────────────────────────
 			const W = 256,
 				H = 256;
@@ -284,6 +289,8 @@
 				mesh.uvs = [0, 0, 1, 0, 1, 1, 0, 1];
 				mesh.updateVertices();
 				resetDeformSliders();
+				cleanVertices = [...mesh.vertices];
+				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
 				logMsg('ACTION', 'Preset: Quad', 'tag-action');
 			}
 
@@ -293,6 +300,8 @@
 				mesh.uvs = [0.5, 0, 1, 1, 0, 1];
 				mesh.updateVertices();
 				resetDeformSliders();
+				cleanVertices = [...mesh.vertices];
+				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
 				logMsg('ACTION', 'Preset: Triangle', 'tag-action');
 			}
 
@@ -314,6 +323,8 @@
 				mesh.indices = idx;
 				mesh.updateVertices();
 				resetDeformSliders();
+				cleanVertices = [...mesh.vertices];
+				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
 				logMsg('ACTION', `Preset: Fan (${n})`, 'tag-action');
 			}
 
@@ -338,6 +349,8 @@
 				mesh.indices = idx;
 				mesh.updateVertices();
 				resetDeformSliders();
+				cleanVertices = [...mesh.vertices];
+				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
 				logMsg('ACTION', `Preset: Grid ${cols}x${rows}`, 'tag-action');
 			}
 
@@ -360,6 +373,8 @@
 				mesh.indices = idx;
 				mesh.updateVertices();
 				resetDeformSliders();
+				cleanVertices = [...mesh.vertices];
+				if (animMode) { baseVertices = [...cleanVertices]; animT = 0; }
 				logMsg('ACTION', `Preset: Strip (${segs})`, 'tag-action');
 			}
 
@@ -383,7 +398,7 @@
 				setActivePreset('btn-grid');
 			};
 
-			setQuad(); // default
+			setGrid(8, 8); // default shape for animations
 
 			// ── Quad deform (only meaningful for quad preset) ─────────────────
 			// Base quad corners: TL(0,0) TR(W,0) BR(W,H) BL(0,H)
@@ -413,13 +428,13 @@
 			};
 
 			// ── Animation ─────────────────────────────────────────────────────
-			let animMode = null;
-			let animT = 0;
-			let baseVertices = [];
 
 			function startAnim(mode) {
+				// Reset to clean shape so switching animation modes doesn't accumulate.
+				mesh.vertices = [...cleanVertices];
+				mesh.updateVertices();
 				animMode = mode;
-				baseVertices = [...mesh.vertices];
+				baseVertices = [...cleanVertices];
 				animT = 0;
 				// Disable deform sliders during animation
 				deformIds.forEach(id => {
@@ -430,20 +445,16 @@
 			}
 
 			document.getElementById('btn-wave').onclick = () => {
-				setGrid(8, 8);
 				startAnim('wave');
 			};
 			document.getElementById('btn-ripple').onclick = () => {
-				setGrid(8, 8);
 				startAnim('ripple');
 			};
 			document.getElementById('btn-twist').onclick = () => {
-				setGrid(8, 8);
 				startAnim('twist');
 			};
 			document.getElementById('btn-stop-anim').onclick = () => {
 				animMode = null;
-				setGrid(8, 8);
 				// Re-enable deform sliders
 				deformIds.forEach(id => {
 					document.getElementById(id).disabled = false;
