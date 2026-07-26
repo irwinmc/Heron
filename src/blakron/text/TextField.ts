@@ -505,7 +505,7 @@ export class TextField extends DisplayObject {
 		if (this._type === TextFieldType.INPUT && this._inputController) {
 			this._inputController.addStageText();
 		}
-		this.addEventListener(TouchEvent.TOUCH_TAP, this.onTapHandler as (e: Event) => void);
+		this.addEventListener(TouchEvent.TOUCH_TAP, this.onTapHandler);
 	}
 
 	override $onRemoveFromStage(): void {
@@ -513,7 +513,7 @@ export class TextField extends DisplayObject {
 		if (this._inputController) {
 			this._inputController.removeStageText();
 		}
-		this.removeEventListener(TouchEvent.TOUCH_TAP, this.onTapHandler as (e: Event) => void);
+		this.removeEventListener(TouchEvent.TOUCH_TAP, this.onTapHandler);
 	}
 
 	override $measureContentBounds(bounds: Rectangle): void {
@@ -707,9 +707,9 @@ export class TextField extends DisplayObject {
 		return this._text;
 	}
 
-	private onTapHandler = (e: Event): void => {
+	private onTapHandler = (e: TouchEvent): void => {
 		if (this._type === TextFieldType.INPUT) return;
-		const te = e as TouchEvent;
+		const te = e;
 		const element = this.getTextElementAt(te.localX, te.localY);
 		if (!element?.style?.href) return;
 		const href = element.style.href;

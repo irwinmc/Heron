@@ -1,6 +1,8 @@
 import { EventDispatcher } from '../events/EventDispatcher.js';
-import { Event } from '../events/Event.js';
+import { Event, type EventMap } from '../events/Event.js';
 import { EventPhase } from '../events/EventPhase.js';
+import { FocusEvent } from '../events/FocusEvent.js';
+import { TouchEvent } from '../events/TouchEvent.js';
 import { Matrix, sharedMatrix } from '../geom/Matrix.js';
 import { Point } from '../geom/Point.js';
 import { Rectangle, sharedRectangle } from '../geom/Rectangle.js';
@@ -10,6 +12,42 @@ import { blendModeToNumber, numberToBlendMode } from './enums/BlendMode.js';
 import type { DisplayObjectContainer } from './DisplayObjectContainer.js';
 import type { Stage } from './Stage.js';
 import type { Graphics } from './Graphics.js';
+
+/**
+ * EventMap for DisplayObject and all its subclasses (Sprite, Stage, TextField, ...).
+ *
+ * Maps each event type string to the concrete Event subclass that the framework
+ * dispatches for that type, so `addEventListener(TouchEvent.TOUCH_TAP, e => ...)`
+ * infers `e` as `TouchEvent` instead of the `Event` base class.
+ *
+ * Subclasses that emit additional event types (e.g. TextField dispatches
+ * TextEvent.LINK) may declare their own EventMap extending this one and pass
+ * it to EventDispatcher via a generic EventDispatcher subclass.
+ */
+export interface DisplayObjectEvents extends EventMap {
+	// Base Event payloads
+	[Event.ADDED]: Event;
+	[Event.REMOVED]: Event;
+	[Event.ADDED_TO_STAGE]: Event;
+	[Event.REMOVED_FROM_STAGE]: Event;
+	[Event.ENTER_FRAME]: Event;
+	[Event.RENDER]: Event;
+	[Event.RESIZE]: Event;
+	[Event.CHANGE]: Event;
+	[Event.COMPLETE]: Event;
+
+	// Touch events — payload is always TouchEvent
+	[TouchEvent.TOUCH_BEGIN]: TouchEvent;
+	[TouchEvent.TOUCH_MOVE]: TouchEvent;
+	[TouchEvent.TOUCH_END]: TouchEvent;
+	[TouchEvent.TOUCH_CANCEL]: TouchEvent;
+	[TouchEvent.TOUCH_TAP]: TouchEvent;
+	[TouchEvent.TOUCH_RELEASE_OUTSIDE]: TouchEvent;
+
+	// Focus events — payload is always FocusEvent
+	[FocusEvent.FOCUS_IN]: FocusEvent;
+	[FocusEvent.FOCUS_OUT]: FocusEvent;
+}
 
 function clampRotation(value: number): number {
 	value %= 360;
@@ -40,7 +78,7 @@ export const enum RenderObjectType {
 	PARTICLE = 6,
 }
 
-export class DisplayObject extends EventDispatcher {
+export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 	// ── Static fields ─────────────────────────────────────────────────────────
 
 	static defaultTouchEnabled = false;
@@ -427,9 +465,25 @@ export class DisplayObject extends EventDispatcher {
 		return false;
 	}
 
+	// Overload 1: type-safe path for events declared in DisplayObjectEvents
+	public override addEventListener<K extends keyof DisplayObjectEvents & string>(
+		type: K,
+		listener: (event: DisplayObjectEvents[K]) => void,
+		useCapture?: boolean,
+		priority?: number,
+	): void;
+	// Overload 2: fallback for arbitrary type strings
 	public override addEventListener(
 		type: string,
 		listener: (event: Event) => void,
+		useCapture?: boolean,
+		priority?: number,
+	): void;
+	// Impl: type-erased to satisfy both overloads (see AnyListener in EventDispatcher)
+	public override addEventListener(
+		type: string,
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		listener: (event: any) => void,
 		useCapture?: boolean,
 		priority?: number,
 	): void {
@@ -443,7 +497,20 @@ export class DisplayObject extends EventDispatcher {
 		}
 	}
 
-	public override removeEventListener(type: string, listener: (event: Event) => void, useCapture?: boolean): void {
+	// Overload 1: type-safe path
+	public override removeEventListener<K extends keyof DisplayObjectEvents & string>(
+		type: K,
+		listener: (event: DisplayObjectEvents[K]) => void,
+		useCapture?: boolean,
+	): void;
+	// Overload 2: fallback
+	public override removeEventListener(type: string, listener: (event: Event) => void, useCapture?: boolean): void;
+	public override removeEventListener(
+		type: string,
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		listener: (event: any) => void,
+		useCapture?: boolean,
+	): void {
 		super.removeEventListener(type, listener, useCapture);
 		if ((type === Event.ENTER_FRAME || type === Event.RENDER) && !this.hasEventListener(type)) {
 			const list =

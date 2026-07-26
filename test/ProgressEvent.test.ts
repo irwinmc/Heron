@@ -5,14 +5,13 @@ import { EventDispatcher } from '../src/blakron/events/EventDispatcher.js';
 
 describe('ProgressEvent', () => {
 	it('dispatchProgressEvent sends event with correct data', () => {
-		const d = new EventDispatcher();
+		const d = new EventDispatcher<{ progress: ProgressEvent }>();
 		let loaded = 0;
 		let total = 0;
 
-		d.addEventListener('progress', (ev: Event) => {
-			const pe = ev as ProgressEvent;
-			loaded = pe.bytesLoaded;
-			total = pe.bytesTotal;
+		d.addEventListener('progress', (ev) => {
+			loaded = ev.bytesLoaded;
+			total = ev.bytesTotal;
 		});
 
 		ProgressEvent.dispatchProgressEvent(d, 'progress', 300, 800);

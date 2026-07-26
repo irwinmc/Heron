@@ -115,7 +115,7 @@ describe('HttpRequest', () => {
 	it('dispatches HTTPStatusEvent with the real status code before COMPLETE/IO_ERROR', () => {
 		const req = new HttpRequest();
 		let receivedStatus = -1;
-		req.addEventListener(HTTPStatusEvent.HTTP_STATUS, e => (receivedStatus = (e as HTTPStatusEvent).status));
+		req.addEventListener(HTTPStatusEvent.HTTP_STATUS, e => (receivedStatus = e.status));
 
 		req.open('https://example.com/ok');
 		req.send();

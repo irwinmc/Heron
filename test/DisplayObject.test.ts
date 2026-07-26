@@ -4,6 +4,8 @@ import { Rectangle } from '../src/blakron/geom/Rectangle.js';
 import { Matrix } from '../src/blakron/geom/Matrix.js';
 import { BlurFilter } from '../src/blakron/filters/BlurFilter.js';
 import { Event } from '../src/blakron/events/Event.js';
+import { TouchEvent } from '../src/blakron/events/TouchEvent.js';
+import { FocusEvent } from '../src/blakron/events/FocusEvent.js';
 
 describe('DisplayObject', () => {
 	it('x/y setter triggers $renderDirty', () => {
@@ -197,5 +199,79 @@ describe('DisplayObject', () => {
 		const obj = new DisplayObject();
 		obj.mask = obj;
 		expect(obj.mask).toBeUndefined();
+	});
+});
+
+// ── Compile-time type assertions for DisplayObjectEvents inference ────────
+// These `it()` blocks have no runtime assertions; they exist so that `tsc`
+// verifies the typed-overload inferences. Each line that should NOT compile
+// is gated by @ts-expect-error — if it ever compiles, the test fails to type
+// and `tsc` will flag it. Lines that SHOULD compile must type-check cleanly.
+
+it('type-check: TouchEvent payload infers without `as` (compiled away)', () => {
+	const sprite = new DisplayObject();
+
+	sprite.addEventListener(TouchEvent.TOUCH_TAP, (e) => {
+		const x: number = e.stageX;
+		const y: number = e.stageY;
+		const id: number = e.touchPointID;
+		const down: boolean = e.touchDown;
+		void [x, y, id, down];
+	});
+
+	sprite.addEventListener(TouchEvent.TOUCH_BEGIN, (e) => {
+		const _: TouchEvent = e;
+		void _;
+	});
+});
+
+it('type-check: FocusEvent payload infers', () => {
+	const sprite = new DisplayObject();
+	sprite.addEventListener(FocusEvent.FOCUS_IN, (e) => {
+		const _: FocusEvent = e;
+		void _;
+	});
+});
+
+it('type-check: base Event payload infers for ADDED / ENTER_FRAME / etc.', () => {
+	const sprite = new DisplayObject();
+	sprite.addEventListener(Event.ENTER_FRAME, (e) => {
+		const type: string = e.type;
+		void type;
+	});
+	sprite.once(Event.ADDED_TO_STAGE, (e) => {
+		const t: string = e.type;
+		void t;
+	});
+});
+
+it('type-check: removeEventListener matches typed path', () => {
+	const sprite = new DisplayObject();
+	const handler = (e: TouchEvent) => void e.stageX;
+	sprite.addEventListener(TouchEvent.TOUCH_MOVE, handler);
+	sprite.removeEventListener(TouchEvent.TOUCH_MOVE, handler);
+});
+
+it('type-check: unknown type strings fall back to (e: Event) => void', () => {
+	const sprite = new DisplayObject();
+	sprite.addEventListener('myCustomEvent', (e) => {
+		const t: string = e.type;
+		void t;
+	});
+});
+
+it('type-check: wrong-type access is rejected at compile time', () => {
+	const sprite = new DisplayObject();
+
+	sprite.addEventListener(Event.ENTER_FRAME, (e) => {
+		// @ts-expect-error — stageX is on TouchEvent, not on the Event payload for ENTER_FRAME
+		const x: number = e.stageX;
+		void x;
+	});
+
+	sprite.addEventListener('touchTapp', (e) => {
+		// @ts-expect-error — 'touchTapp' is not a declared key; falls back to Event, no stageX
+		const x: number = e.stageX;
+		void x;
 	});
 });

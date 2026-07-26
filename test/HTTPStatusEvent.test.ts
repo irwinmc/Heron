@@ -5,11 +5,11 @@ import { EventDispatcher } from '../src/blakron/events/EventDispatcher.js';
 
 describe('HTTPStatusEvent', () => {
 	it('dispatchHTTPStatusEvent sends event with status code', () => {
-		const d = new EventDispatcher();
+		const d = new EventDispatcher<{ httpStatus: HTTPStatusEvent }>();
 		let receivedStatus = 0;
 
-		d.addEventListener('httpStatus', (ev: Event) => {
-			receivedStatus = (ev as HTTPStatusEvent).status;
+		d.addEventListener('httpStatus', (ev) => {
+			receivedStatus = ev.status;
 		});
 
 		HTTPStatusEvent.dispatchHTTPStatusEvent(d, 200);
@@ -17,11 +17,11 @@ describe('HTTPStatusEvent', () => {
 	});
 
 	it('dispatchHTTPStatusEvent with error code', () => {
-		const d = new EventDispatcher();
+		const d = new EventDispatcher<{ httpStatus: HTTPStatusEvent }>();
 		let receivedStatus = 0;
 
-		d.addEventListener('httpStatus', (ev: Event) => {
-			receivedStatus = (ev as HTTPStatusEvent).status;
+		d.addEventListener('httpStatus', (ev) => {
+			receivedStatus = ev.status;
 		});
 
 		HTTPStatusEvent.dispatchHTTPStatusEvent(d, 404);

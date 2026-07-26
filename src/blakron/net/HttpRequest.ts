@@ -1,10 +1,17 @@
 import { EventDispatcher } from '../events/EventDispatcher.js';
-import { Event } from '../events/Event.js';
+import { Event, type EventMap } from '../events/Event.js';
 import { HTTPStatusEvent } from '../events/HTTPStatusEvent.js';
 import { IOErrorEvent } from '../events/IOErrorEvent.js';
 import { ProgressEvent } from '../events/ProgressEvent.js';
 import { HttpMethod } from './HttpMethod.js';
 import { HttpResponseType } from './HttpResponseType.js';
+
+export interface HttpRequestEvents extends EventMap {
+	[HTTPStatusEvent.HTTP_STATUS]: HTTPStatusEvent;
+	[Event.COMPLETE]: Event;
+	[IOErrorEvent.IO_ERROR]: IOErrorEvent;
+	[ProgressEvent.PROGRESS]: ProgressEvent;
+}
 
 /**
  * Event-driven XMLHttpRequest wrapper.
@@ -13,7 +20,7 @@ import { HttpResponseType } from './HttpResponseType.js';
  * may be reused by calling `open()` for each new request; doing so aborts the
  * previous request and clears headers queued for it.
  */
-export class HttpRequest extends EventDispatcher {
+export class HttpRequest extends EventDispatcher<HttpRequestEvents> {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
 	/** Response body representation requested from XMLHttpRequest. */

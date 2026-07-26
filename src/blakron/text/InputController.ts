@@ -126,8 +126,8 @@ export class InputController {
 		this.stageText.hide();
 	};
 
-	private onStageDown = (e: Event): void => {
-		if ((e as TouchEvent).target !== this._text) {
+	private onStageDown = (e: TouchEvent): void => {
+		if (e.target !== this._text) {
 			this.stageText.hide();
 		}
 	};
