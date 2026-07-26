@@ -91,7 +91,6 @@ describe('EventDispatcher', () => {
 
 	it('dispatchEventWith short-circuits when no listeners', () => {
 		const d = new EventDispatcher();
-		// Should not throw, and should return true (not prevented)
 		const result = d.dispatchEventWith('nonexistent');
 		expect(result).toBe(true);
 	});
@@ -115,7 +114,6 @@ describe('EventDispatcher', () => {
 		});
 		d.dispatchEventWith('test');
 		expect(late).not.toHaveBeenCalled();
-		// But fires on next dispatch
 		d.dispatchEventWith('test');
 		expect(late).toHaveBeenCalled();
 	});
@@ -129,10 +127,8 @@ describe('EventDispatcher', () => {
 		d.addEventListener('test', fn1);
 		d.addEventListener('test', fn2);
 		d.dispatchEventWith('test');
-		// fn2 should still fire in this round (copy-on-write)
 		expect(fn1).toHaveBeenCalledOnce();
 		expect(fn2).toHaveBeenCalledOnce();
-		// But not on next dispatch
 		fn2.mockClear();
 		d.dispatchEventWith('test');
 		expect(fn2).not.toHaveBeenCalled();
@@ -144,17 +140,15 @@ describe('EventDispatcher', () => {
 		const capture = vi.fn();
 		d.addEventListener('test', bubble, false);
 		d.addEventListener('test', capture, true);
-		// dispatchEvent dispatches to bubble phase by default
 		d.dispatchEventWith('test');
 		expect(bubble).toHaveBeenCalledOnce();
-		// capture listener is in a separate map, not triggered by AT_TARGET bubble dispatch
 	});
 
 	it('removeEventListener with wrong useCapture does not remove', () => {
 		const d = new EventDispatcher();
 		const fn = vi.fn();
-		d.addEventListener('test', fn, true); // capture
-		d.removeEventListener('test', fn, false); // try remove from bubble
+		d.addEventListener('test', fn, true);
+		d.removeEventListener('test', fn, false);
 		expect(d.hasEventListener('test')).toBe(true);
 	});
 
@@ -163,9 +157,7 @@ describe('EventDispatcher', () => {
 			const dispatcher = new EventDispatcher();
 			const listener = vi.fn(() => dispatcher.dispatchEventWith('test'));
 			dispatcher.once('test', listener);
-
 			dispatcher.dispatchEventWith('test');
-
 			expect(listener).toHaveBeenCalledOnce();
 			expect(dispatcher.hasEventListener('test')).toBe(false);
 		});
@@ -175,15 +167,12 @@ describe('EventDispatcher', () => {
 			const b = new EventDispatcher();
 			const aOnce = vi.fn();
 			const bOnce = vi.fn();
-
 			a.once('test', aOnce, false, 10);
 			a.addEventListener('test', () => b.dispatchEventWith('test'));
 			b.once('test', bOnce);
-
 			a.dispatchEventWith('test');
 			a.dispatchEventWith('test');
 			b.dispatchEventWith('test');
-
 			expect(aOnce).toHaveBeenCalledOnce();
 			expect(bOnce).toHaveBeenCalledOnce();
 		});
@@ -195,7 +184,6 @@ describe('EventDispatcher', () => {
 				throw error;
 			});
 			dispatcher.once('test', listener);
-
 			expect(() => dispatcher.dispatchEventWith('test')).toThrow(error);
 			expect(listener).toHaveBeenCalledOnce();
 			expect(dispatcher.hasEventListener('test')).toBe(false);

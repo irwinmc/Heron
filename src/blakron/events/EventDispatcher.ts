@@ -1,16 +1,25 @@
-import { Event } from './Event.js';
+import { Event, type EventMap } from './Event.js';
 import { EventPhase } from './EventPhase.js';
 import type { IEventDispatcher } from './IEventDispatcher.js';
 
+/**
+ * Type-erased listener shape for the implementation signatures below.
+ * The public overloads declare typed listeners like (e: TMap[K]) => void,
+ * but strict-mode parameter contravariance (TS2394) blocks the impl from
+ * using (event: Event) => void. `any` here is the intentional escape hatch.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyListener = (event: any) => void;
+
 interface EventBin {
 	type: string;
-	listener: (event: Event) => void;
+	listener: AnyListener;
 	priority: number;
 	useCapture: boolean;
 	once: boolean;
 }
 
-export class EventDispatcher implements IEventDispatcher {
+export class EventDispatcher<TMap extends EventMap = Record<string, Event>> implements IEventDispatcher {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
 	private _target: IEventDispatcher;
@@ -28,20 +37,56 @@ export class EventDispatcher implements IEventDispatcher {
 
 	// ── Public methods ────────────────────────────────────────────────────────
 
+	// Overload 1: type-safe path for classes that declare an EventMap
+	public addEventListener<K extends keyof TMap & string>(
+		type: K,
+		listener: (event: TMap[K]) => void,
+		useCapture?: boolean,
+		priority?: number,
+	): void;
+	// Overload 2: fallback for untyped / legacy callers
 	public addEventListener(
 		type: string,
 		listener: (event: Event) => void,
+		useCapture?: boolean,
+		priority?: number,
+	): void;
+	public addEventListener(
+		type: string,
+		listener: AnyListener,
 		useCapture?: boolean,
 		priority?: number,
 	): void {
 		this.addListener(type, listener, useCapture, priority, false);
 	}
 
-	public once(type: string, listener: (event: Event) => void, useCapture?: boolean, priority?: number): void {
+	// Overload 1: type-safe path
+	public once<K extends keyof TMap & string>(
+		type: K,
+		listener: (event: TMap[K]) => void,
+		useCapture?: boolean,
+		priority?: number,
+	): void;
+	// Overload 2: fallback
+	public once(
+		type: string,
+		listener: (event: Event) => void,
+		useCapture?: boolean,
+		priority?: number,
+	): void;
+	public once(type: string, listener: AnyListener, useCapture?: boolean, priority?: number): void {
 		this.addListener(type, listener, useCapture, priority, true);
 	}
 
-	public removeEventListener(type: string, listener: (event: Event) => void, useCapture?: boolean): void {
+	// Overload 1: type-safe path
+	public removeEventListener<K extends keyof TMap & string>(
+		type: K,
+		listener: (event: TMap[K]) => void,
+		useCapture?: boolean,
+	): void;
+	// Overload 2: fallback
+	public removeEventListener(type: string, listener: (event: Event) => void, useCapture?: boolean): void;
+	public removeEventListener(type: string, listener: AnyListener, useCapture?: boolean): void {
 		const map = this.getMap(useCapture);
 		const list = map.get(type);
 		if (!list) return;
@@ -83,7 +128,7 @@ export class EventDispatcher implements IEventDispatcher {
 
 	private addListener(
 		type: string,
-		listener: (event: Event) => void,
+		listener: AnyListener,
 		useCapture?: boolean,
 		priority?: number,
 		once?: boolean,
@@ -118,7 +163,7 @@ export class EventDispatcher implements IEventDispatcher {
 		return true;
 	}
 
-	private removeEntry(list: EventBin[], listener: (event: Event) => void): boolean {
+	private removeEntry(list: EventBin[], listener: AnyListener): boolean {
 		for (let i = 0; i < list.length; i++) {
 			if (list[i].listener === listener) {
 				list.splice(i, 1);

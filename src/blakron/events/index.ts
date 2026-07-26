@@ -1,4 +1,4 @@
-export { Event } from './Event.js';
+export { Event, type EventMap } from './Event.js';
 export { EventPhase } from './EventPhase.js';
 export type { IEventDispatcher } from './IEventDispatcher.js';
 export { EventDispatcher } from './EventDispatcher.js';

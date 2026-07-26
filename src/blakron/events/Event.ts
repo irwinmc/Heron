@@ -1,6 +1,9 @@
 import { EventPhase } from './EventPhase.js';
 import type { IEventDispatcher } from './IEventDispatcher.js';
 
+/** Event type string → Event subclass mapping. Each event source declares its own. */
+export type EventMap = Record<string, Event>;
+
 type EventConstructor<T extends Event> = new (type: string, bubbles?: boolean, cancelable?: boolean) => T;
 
 const eventPools = new WeakMap<EventConstructor<Event>, Event[]>();
