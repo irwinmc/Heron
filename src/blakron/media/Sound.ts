@@ -1,7 +1,12 @@
-import { Event } from '../events/Event.js';
+import { Event, type EventMap } from '../events/Event.js';
 import { EventDispatcher } from '../events/EventDispatcher.js';
 import { IOErrorEvent } from '../events/IOErrorEvent.js';
 import { SoundChannel } from './SoundChannel.js';
+
+export interface SoundEvents extends EventMap {
+	[Event.COMPLETE]: Event;
+	[IOErrorEvent.IO_ERROR]: IOErrorEvent;
+}
 
 export const SoundType = {
 	MUSIC: 'music',
@@ -68,7 +73,7 @@ function processDecodeQueue(): void {
  * Prefers Web Audio API for precise control and better mobile support.
  * Falls back to HTMLAudioElement when Web Audio API is unavailable.
  */
-export class Sound extends EventDispatcher {
+export class Sound extends EventDispatcher<SoundEvents> {
 	// ── Instance fields ───────────────────────────────────────────────────────
 
 	public type: SoundType = SoundType.EFFECT;

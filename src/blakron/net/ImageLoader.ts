@@ -1,7 +1,12 @@
 import { EventDispatcher } from '../events/EventDispatcher.js';
-import { Event } from '../events/Event.js';
+import { Event, type EventMap } from '../events/Event.js';
 import { IOErrorEvent } from '../events/IOErrorEvent.js';
 import { BitmapData } from '../display/texture/BitmapData.js';
+
+export interface ImageLoaderEvents extends EventMap {
+	[Event.COMPLETE]: Event;
+	[IOErrorEvent.IO_ERROR]: IOErrorEvent;
+}
 
 /**
  * Event-driven browser image loader.
@@ -10,7 +15,7 @@ import { BitmapData } from '../display/texture/BitmapData.js';
  * browser handlers and clears the image source, preventing cancelled requests
  * from updating data or dispatching an event later.
  */
-export class ImageLoader extends EventDispatcher {
+export class ImageLoader extends EventDispatcher<ImageLoaderEvents> {
 	// ── Static fields ─────────────────────────────────────────────────────────
 
 	/** Default cross-origin mode applied to newly created loaders. */

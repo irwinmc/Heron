@@ -1,12 +1,18 @@
 import { EventDispatcher } from '../events/EventDispatcher.js';
 import { TimerEvent } from '../events/TimerEvent.js';
+import type { EventMap } from '../events/Event.js';
 import { ticker, getTimer } from '../player/SystemTicker.js';
+
+export interface TimerEvents extends EventMap {
+	[TimerEvent.TIMER]: TimerEvent;
+	[TimerEvent.TIMER_COMPLETE]: TimerEvent;
+}
 
 /**
  * Timer lets you run code on a specified time sequence.
  * Use start() to begin, and listen for TimerEvent.TIMER / TimerEvent.TIMER_COMPLETE.
  */
-export class Timer extends EventDispatcher {
+export class Timer extends EventDispatcher<TimerEvents> {
 	public repeatCount: number;
 
 	private _delay = 0;

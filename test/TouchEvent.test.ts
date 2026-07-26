@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { TouchEvent } from '../src/blakron/events/TouchEvent.js';
-import { Event } from '../src/blakron/events/Event.js';
+import { Event, type EventMap } from '../src/blakron/events/Event.js';
 import { EventDispatcher } from '../src/blakron/events/EventDispatcher.js';
+
+interface TouchTestEvents extends EventMap {
+	[TouchEvent.TOUCH_BEGIN]: TouchEvent;
+}
 
 describe('TouchEvent', () => {
 	it('localX/localY fall back to stageX/stageY when target lacks $getInvertedConcatenatedMatrix', () => {
@@ -25,14 +29,13 @@ describe('TouchEvent', () => {
 	});
 
 	it('dispatchTouchEvent dispatches event with correct properties', () => {
-		const d = new EventDispatcher();
+		const d = new EventDispatcher<TouchTestEvents>();
 		let receivedStageX = 0;
 		let receivedTouchID = 0;
 
-		d.addEventListener('touchBegin', (ev: Event) => {
-			const te = ev as TouchEvent;
-			receivedStageX = te.stageX;
-			receivedTouchID = te.touchPointID;
+		d.addEventListener(TouchEvent.TOUCH_BEGIN, (ev) => {
+			receivedStageX = ev.stageX;
+			receivedTouchID = ev.touchPointID;
 		});
 
 		TouchEvent.dispatchTouchEvent(d, 'touchBegin', false, false, 200, 300, 42);
@@ -46,10 +49,10 @@ describe('TouchEvent', () => {
 	});
 
 	it('dispatchTouchEvent sets touchDown', () => {
-		const d = new EventDispatcher();
+		const d = new EventDispatcher<TouchTestEvents>();
 		let down = false;
-		d.addEventListener('touchBegin', (ev: Event) => {
-			down = (ev as TouchEvent).touchDown;
+		d.addEventListener(TouchEvent.TOUCH_BEGIN, (ev) => {
+			down = ev.touchDown;
 		});
 		TouchEvent.dispatchTouchEvent(d, 'touchBegin', false, false, 0, 0, 0, true);
 		expect(down).toBe(true);
