@@ -2,7 +2,7 @@
 
 A modern rewrite of the Egret game engine. Maintains Egret-compatible display object and event APIs while upgrading the rendering architecture, type safety, and tooling.
 
-> **Stable (1.x).** Targets ES2022 and evergreen browsers (Chrome / Edge / Firefox / Safari). No IE / old-Android / pre-2022 Safari support shims. See [CHANGELOG.md](./CHANGELOG.md) for the current version.
+> **Stable (1.0.3).** Targets ES2022 and evergreen browsers (Chrome / Edge / Firefox / Safari). No IE / old-Android / pre-2022 Safari support shims.
 
 ## Features
 
