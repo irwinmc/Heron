@@ -4,6 +4,48 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.3] — 2026-07-27
+
+### Fixed
+
+- **TextField**: Overrode the `width` and `height` **getters**. The class previously only overrode the setters, which in JS/TS shadows the parent getter on `DisplayObject` — so reading `tf.width` / `tf.height` returned `undefined` instead of the explicit or measured value. Both the getter and setter are now overridden together, returning `$explicitWidth`/`$explicitHeight` when set, or the measured content bounds otherwise. This was the root cause of INPUT TextFields rendering at zero size and disappearing.
+- **StageText**: Commented out the `_inputDiv.style.clip = rect(...)` line (and its `clearInputElement()` reset). The deprecated CSS `clip` property was firing TS lint warnings (`'clip' is deprecated`); the rect was equal to the element's own `width × height`, so it was a no-op (real clipping is done by `overflow: hidden` + explicit `width`/`height`). Removing it has zero runtime effect and silences the warning.
+
+### Changed
+
+- **examples/text-test.html**: The `Input mode` test case no longer sets `tf.background` / `tf.border` on the TextField. Instead it draws the background as a sibling `Shape` (`graphics.drawRect`) at the same position and dimensions. This decouples the input background from the TextField's own texture, so it is unaffected by any future TextPipe INPUT-mode early-return (which would drop the whole texture, including a self-drawn background). Matches the skin-based pattern used by `@blakron/ui`'s `TextInput`.
+
+---
+
+## [1.0.2] — 2026-07-27
+
+Type-safe event listeners via `EventMap`. `EventDispatcher` now accepts an optional `TMap` generic mapping event-type strings to their concrete `Event` subclasses, so listeners receive the correct subclass without manual `as` casts. Callers that don't declare a map keep working via the existing `(e: Event) => void` fallback overload — fully backward-compatible.
+
+> Note: `1.0.1` was a version-number-only bump with no code changes; it is intentionally omitted from this changelog.
+
+### Added
+
+- **EventDispatcher**: Optional `<TMap extends EventMap>` generic on the class, plus type-safe overloads for `addEventListener`, `removeEventListener`, and `once` keyed by `TMap[K]`. The implementation signature uses a type-erased `AnyListener` to bypass strict-mode parameter contravariance (TS2394). Existing callers see no change.
+- **EventMap type**: Exported from `events/index.ts` (`Record<string, Event>`-compatible base for declaring event-type → subclass mappings).
+- **Typed event maps** declared at each event source:
+  - `DisplayObjectEvents` on `DisplayObject` — covers `TouchEvent.TOUCH_BEGIN/MOVE/END/TAP`, `FocusEvent.FOCUS_IN/OUT`, `Event.ADDED/REMOVED_TO_STAGE`, `Event.ENTER_FRAME`, etc.
+  - `HttpRequestEvents` on `HttpRequest` — `HTTPStatusEvent.HTTP_STATUS`, `IOErrorEvent.IO_ERROR`, `ProgressEvent.PROGRESS`, `Event.COMPLETE`.
+  - `SoundEvents` on `Sound`.
+  - `ImageLoaderEvents` on `ImageLoader`.
+  - `TimerEvents` on `Timer` — `TimerEvent.TIMER`, `TimerEvent.TIMER_COMPLETE`.
+
+### Changed
+
+- **InputController / TextField / HttpRequest**: Internal listener registrations and several test sites dropped their `e as TouchEvent` / `e as HTTPStatusEvent` / `e as ProgressEvent` casts now that the dispatcher hands back the correct subclass directly.
+
+### Tests
+
+- Added `test/EventMap.test.ts` (178 lines) covering type-safe dispatch, the untyped fallback overload, `once()` with a typed map, and mistyped-event-name compile errors.
+- Added `test/DisplayObject.test.ts` typed-listener coverage.
+- Updated `test/EventDispatcher.test.ts`, `test/HttpRequest.test.ts`, `test/HTTPStatusEvent.test.ts`, `test/ProgressEvent.test.ts`, `test/TouchEvent.test.ts` to use the new typed signatures. Total test count: 565 → 583.
+
+---
+
 ## [1.0.0] — 2026-07-26
 
 First stable release. From this version forward the public API surface (exports from `src/index.ts`) is committed to backward-compatible evolution per semver.

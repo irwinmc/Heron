@@ -2,7 +2,7 @@
 
 A modern rewrite of the Egret game engine. Maintains Egret-compatible display object and event APIs while upgrading the rendering architecture, type safety, and tooling.
 
-> **Stable (1.0.0).** Targets ES2022 and evergreen browsers (Chrome / Edge / Firefox / Safari). No IE / old-Android / pre-2022 Safari support shims.
+> **Stable (1.x).** Targets ES2022 and evergreen browsers (Chrome / Edge / Firefox / Safari). No IE / old-Android / pre-2022 Safari support shims. See [CHANGELOG.md](./CHANGELOG.md) for the current version.
 
 ## Features
 
@@ -104,7 +104,7 @@ root.addChild(rect);
 ```bash
 pnpm install
 pnpm run build        # compile
-pnpm run test         # run tests (565 cases)
+pnpm run test         # run tests (583 cases)
 pnpm run dev          # watch mode
 ```
 
