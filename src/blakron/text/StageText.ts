@@ -158,7 +158,7 @@ export class StageText extends EventDispatcher {
 
 		// Clip the div to the TextField bounds (matches Egret's approach)
 		this._inputDiv.style.overflow = 'hidden';
-		this._inputDiv.style.clip = `rect(0px ${inputCSSWidth}px ${tf.height * this._gscaleY}px 0px)`;
+		// this._inputDiv.style.clip = `rect(0px ${inputCSSWidth}px ${tf.height * this._gscaleY}px 0px)`;
 		this._inputDiv.style.width = inputCSSWidth + 'px';
 		this._inputDiv.style.height = tf.height * this._gscaleY + 'px';
 	}
@@ -341,7 +341,7 @@ export class StageText extends EventDispatcher {
 			div.style.height = '0px';
 			div.style.width = '0px';
 			div.style.transform = '';
-			div.style.clip = '';
+			// div.style.clip = '';
 		}
 		this._clearing = false;
 	}

@@ -75,6 +75,11 @@ export class TextField extends DisplayObject {
 	}
 
 	// Width/Height affect line-breaking, so invalidate text when they change.
+	// NOTE: override both getter AND setter — overriding only the setter in JS
+	// shadows the parent's getter, causing `tf.height` to return `undefined`.
+	public override get width(): number {
+		return isNaN(this.$explicitWidth) ? this.$getOriginalBounds().width : this.$explicitWidth;
+	}
 	public override set width(value: number) {
 		const v = isNaN(value) ? NaN : value;
 		if (this.$explicitWidth === v) return;
@@ -82,6 +87,9 @@ export class TextField extends DisplayObject {
 		this.invalidateText();
 	}
 
+	public override get height(): number {
+		return isNaN(this.$explicitHeight) ? this.$getOriginalBounds().height : this.$explicitHeight;
+	}
 	public override set height(value: number) {
 		const v = isNaN(value) ? NaN : value;
 		if (this.$explicitHeight === v) return;

@@ -116,6 +116,7 @@
 			import {
 				createPlayer,
 				Sprite,
+				Shape,
 				TextField,
 				HorizontalAlign,
 				VerticalAlign,
@@ -498,6 +499,10 @@
 			});
 
 			// --- 18. Input mode ---
+			// Background is drawn by a sibling Shape (skin-style), not by the
+			// TextField itself. This keeps the bg independent of the TextPipe's
+			// INPUT-mode text-texture skip, so the field never loses its bg
+			// while focused (TextField.background would be dropped by TextPipe).
 			define('Input mode (click)', () => {
 				const tf = new TextField();
 				tf.text = 'Click to edit';
@@ -505,13 +510,21 @@
 				tf.size = 18;
 				tf.width = 600;
 				tf.height = 34;
-				tf.border = true;
-				tf.borderColor = 0x6c9cff;
-				tf.background = true;
-				tf.backgroundColor = 0x1a1a2e;
 				tf.type = TextFieldType.INPUT;
 				tf.x = 20;
 				tf.y = 20;
+
+				// Skin-style background: a Shape rect at the same x/y/w/h as the
+				// TextField, sitting one layer below it (added first).
+				const bg = new Shape();
+				bg.graphics.lineStyle(1, 0x6c9cff, 1);
+				bg.graphics.beginFill(0x1a1a2e, 1);
+				bg.graphics.drawRect(0, 0, tf.width, tf.height);
+				bg.graphics.endFill();
+				bg.x = tf.x;
+				bg.y = tf.y;
+				root.addChild(bg);
+
 				root.addChild(tf);
 				assert(tf.type === TextFieldType.INPUT, 'type = INPUT');
 				assert(tf.touchEnabled === true, 'touchEnabled = true');
