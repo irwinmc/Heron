@@ -1,7 +1,6 @@
 import { DisplayObject, RenderObjectType } from '../display/DisplayObject.js';
 import type { Stage } from '../display/Stage.js';
 import { Rectangle } from '../geom/Rectangle.js';
-import { Event } from '../events/Event.js';
 import { TouchEvent } from '../events/TouchEvent.js';
 import { TextEvent } from '../events/TextEvent.js';
 import { measureText, getFontString } from './TextMeasurer.js';
@@ -641,7 +640,7 @@ export class TextField extends DisplayObject {
 					// Width constrained — need to break the segment
 					const totalSegWidth = measureText(seg, fontFamily, fontSize, bold, italic);
 
-					if (lineWidth + totalSegWidth <= maxWidth) {
+					if (lineWidth + totalSegWidth <= maxWidth || !this._multiline) {
 						// Fits on current line
 						currentLine.push({ text: seg, width: totalSegWidth, style: element.style });
 						lineWidth += totalSegWidth;

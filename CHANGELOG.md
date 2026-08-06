@@ -4,6 +4,14 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.4] — 2026-08-05
+
+### Fixed
+
+- **TextField: single-line mode no longer wraps at max-width** — `calculateLines` now checks `!this._multiline` before breaking a text segment across lines. Previously, even with `multiline = false`, text segments that exceeded the field's available width would be forcibly split, causing single-line TextFields (especially INPUT type) to overflow vertically. Single-line fields now keep all text on one line regardless of width.
+
+---
+
 ## [1.0.3] — 2026-07-27
 
 ### Fixed
