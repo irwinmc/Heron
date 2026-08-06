@@ -53,10 +53,11 @@ describe('StageText DOM overlay', () => {
 		expect(wrapper.style.width).toBe('100px');
 		expect(wrapper.style.height).toBe('24px');
 		expect(input.style.width).toBe('100px');
-		expect(input.style.height).toBe('24px');
+		expect(input.style.height).toBe('18px');
+		expect(input.style.top).toBe('3px');
 		expect(input.style.fontSize).toBe('18px');
 		expect(input.style.fontFamily).toBe('Arial');
-		expect(input.style.padding).toBe('3px 0px');
+		expect(input.style.padding).toBe('0px');
 		expect(input.style.boxSizing).toBe('border-box');
 	});
 });

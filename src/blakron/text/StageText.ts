@@ -109,8 +109,9 @@ export class StageText extends EventDispatcher {
 			const remaining = Math.max(0, tf.height - tf.size);
 			const top = remaining * getValign(tf);
 			el.style.lineHeight = tf.size + 'px';
-			el.style.height = tf.height + 'px';
-			el.style.padding = `${top}px 0px ${remaining - top}px 0px`;
+			el.style.top = top + 'px';
+			el.style.height = Math.min(tf.size, tf.height) + 'px';
+			el.style.padding = '0px';
 		}
 
 		// Clip the div to the TextField bounds (matches Egret's approach)
