@@ -4,6 +4,14 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.5] — 2026-08-06
+
+### Changed
+
+- **StageText: rewritten DOM positioning via display-list matrix** — replaced the manual `localToGlobal()` + `canvas.getBoundingClientRect()` coordinate conversion and accumulated-rotation loop with a single `$getConcatenatedMatrix()` call, applied as a CSS `matrix()` transform on the wrapper div. This correctly handles translation, scale, rotation, and canvas scaling in one step without the per-frame `_gscaleX`/`_gscaleY` ratio bookkeeping. The input element now uses `box-sizing: border-box` with simplified padding calculations for single-line vertical alignment.
+
+---
+
 ## [1.0.4] — 2026-08-05
 
 ### Fixed

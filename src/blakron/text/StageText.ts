@@ -9,17 +9,15 @@ import type { TextField } from './TextField.js';
  * ────────────────────
  * The wrapper div uses `position:fixed` so that its `left`/`top` are relative
  * to the **viewport**.  We then compute the viewport coordinates of the
- * TextField by combining `canvas.getBoundingClientRect()` with the stage-
- * logical coordinates from `localToGlobal()`.  This works regardless of the
- * page layout (flexbox centering, CSS transforms, scroll offset, etc.).
+ * TextField by combining `canvas.getBoundingClientRect()` with the complete
+ * concatenated display-list matrix. This preserves translation, scale,
+ * rotation, and the page's canvas scaling.
  */
 export class StageText extends EventDispatcher {
 	private _textField?: TextField;
 	private _inputElement?: HTMLInputElement | HTMLTextAreaElement;
 	private _inputDiv?: HTMLDivElement;
 	private _text = '';
-	private _gscaleX = 1;
-	private _gscaleY = 1;
 	private _compositionLock = false;
 	private _clearing = false;
 	private _isShowing = false;
@@ -82,21 +80,9 @@ export class StageText extends EventDispatcher {
 		if (!this._textField || !this._inputElement || !this._inputDiv) return;
 		const tf = this._textField;
 		const el = this._inputElement;
-		const canvas = this.getCanvas();
-		const stage = tf.stage;
-
-		// _gscaleX/Y = canvas CSS pixels per canvas buffer pixel.
-		// The WebGL renderer maps stage coords 1:1 to canvas buffer pixels
-		// (projectionVector = canvasWidth/2, -canvasHeight/2), so this ratio
-		// is also "CSS pixels per stage pixel".  It is ≈1.0 when the CSS box
-		// size matches the buffer size.
-		if (canvas) {
-			this._gscaleX = (canvas.clientWidth || 1) / (canvas.width || 1);
-			this._gscaleY = (canvas.clientHeight || 1) / (canvas.height || 1);
-		}
 
 		el.style.fontFamily = tf.fontFamily;
-		el.style.fontSize = tf.size * this._gscaleY + 'px';
+		el.style.fontSize = tf.size + 'px';
 		el.style.fontWeight = tf.bold ? 'bold' : 'normal';
 		el.style.fontStyle = tf.italic ? 'italic' : 'normal';
 		el.style.textAlign = tf.textAlign;
@@ -110,57 +96,28 @@ export class StageText extends EventDispatcher {
 			}
 		}
 
-		// Width: clamp to not exceed the right edge of the stage
-		let tw: number;
-		if (stage) {
-			const globalX = tf.localToGlobal(0, 0).x;
-			tw = Math.min(tf.width, stage.stageWidth - globalX);
-		} else {
-			tw = tf.width;
-		}
-
-		// When scaleX !== scaleY (non-uniform stage scaling), the input element
-		// needs a CSS transform to match the canvas aspect ratio.
-		const rawScaleRatio = this._gscaleX / this._gscaleY;
-		const aspectScale = isFinite(rawScaleRatio) ? rawScaleRatio : 1;
-		const inputCSSWidth = tw * this._gscaleX;
-
-		el.style.width = inputCSSWidth / aspectScale + 'px';
-		if (aspectScale !== 1) {
-			el.style.transform = `scale(${aspectScale}, 1)`;
-			el.style.left = `${((aspectScale - 1) * inputCSSWidth) / aspectScale / 2}px`;
-		} else {
-			el.style.transform = '';
-			el.style.left = '0px';
-		}
+		// Keep the DOM control in TextField-local pixels. initElementPosition()
+		// applies the complete display-list matrix to the wrapper, exactly as the
+		// renderer does for the canvas text.
+		el.style.width = tf.width + 'px';
+		el.style.left = '0px';
+		el.style.transform = '';
 
 		if (tf.multiline) {
 			this.setAreaHeight(tf, el);
 		} else {
-			// Single-line: height = fontSize in CSS pixels, padding handles vertical align
-			const cssFontH = tf.size * this._gscaleY;
-			el.style.lineHeight = cssFontH + 'px';
-			el.style.height = cssFontH + 'px';
-			if (tf.height < tf.size) {
-				const bottom = (tf.size / 2) * this._gscaleY;
-				el.style.padding = `0px 0px ${bottom}px 0px`;
-			} else {
-				const rap = (tf.height - tf.size) * this._gscaleY;
-				const valign = getValign(tf);
-				const top = rap * valign;
-				let bottom = rap - top;
-				if (bottom < (tf.size / 2) * this._gscaleY) {
-					bottom = (tf.size / 2) * this._gscaleY;
-				}
-				el.style.padding = `${top}px 0px ${bottom}px 0px`;
-			}
+			const remaining = Math.max(0, tf.height - tf.size);
+			const top = remaining * getValign(tf);
+			el.style.lineHeight = tf.size + 'px';
+			el.style.height = tf.height + 'px';
+			el.style.padding = `${top}px 0px ${remaining - top}px 0px`;
 		}
 
 		// Clip the div to the TextField bounds (matches Egret's approach)
 		this._inputDiv.style.overflow = 'hidden';
 		// this._inputDiv.style.clip = `rect(0px ${inputCSSWidth}px ${tf.height * this._gscaleY}px 0px)`;
-		this._inputDiv.style.width = inputCSSWidth + 'px';
-		this._inputDiv.style.height = tf.height * this._gscaleY + 'px';
+		this._inputDiv.style.width = tf.width + 'px';
+		this._inputDiv.style.height = tf.height + 'px';
 	}
 
 	// ── Element lifecycle ────────────────────────────────────────────────────
@@ -195,13 +152,13 @@ export class StageText extends EventDispatcher {
 				el.style.resize = 'none';
 			}
 			el.style.position = 'absolute';
-			el.style.boxSizing = 'content-box';
+			el.style.boxSizing = 'border-box';
 			el.style.left = '0px';
 			el.style.top = '0px';
 			el.style.border = 'none';
 			el.style.padding = '0';
 			el.style.margin = '0';
-			el.style.outline = 'thin';
+			el.style.outline = 'none';
 			el.style.background = 'none transparent';
 			el.style.overflow = 'hidden';
 			el.style.wordBreak = 'break-all';
@@ -246,16 +203,12 @@ export class StageText extends EventDispatcher {
 		if (!this._textField || !this._inputDiv) return;
 		const tf = this._textField;
 		const canvas = this.getCanvas();
-		const stage = tf.stage;
 
-		// Convert the TextField's local origin (0,0) to stage logical coordinates.
-		const stagePoint = tf.localToGlobal(0, 0);
-
-		// Convert stage logical coords → viewport (CSS) coords.
-		// We must use the canvas' INNER content area (excluding CSS border)
-		// for both the origin and the scaling factor.
-		let left = stagePoint.x;
-		let top = stagePoint.y;
+		const matrix = tf.$getConcatenatedMatrix();
+		let left = 0;
+		let top = 0;
+		let scaleX = 1;
+		let scaleY = 1;
 
 		if (canvas) {
 			// getBoundingClientRect includes CSS border
@@ -267,11 +220,10 @@ export class StageText extends EventDispatcher {
 			// Stage coords map 1:1 to canvas buffer pixels (WebGL projection).
 			// Canvas buffer pixels map to CSS pixels via:  cssPx = bufPx * (clientW / canvas.width)
 			// Combined:  cssPx = stagePx * (clientW / canvas.width)
-			const scaleX = (canvas.clientWidth || 1) / (canvas.width || 1);
-			const scaleY = (canvas.clientHeight || 1) / (canvas.height || 1);
-
-			left = rect.left + borderLeft + stagePoint.x * scaleX;
-			top = rect.top + borderTop + stagePoint.y * scaleY;
+			scaleX = (canvas.clientWidth || 1) / (canvas.width || 1);
+			scaleY = (canvas.clientHeight || 1) / (canvas.height || 1);
+			left = rect.left + borderLeft;
+			top = rect.top + borderTop;
 		}
 
 		this._inputDiv.style.left = left + 'px';
@@ -279,20 +231,13 @@ export class StageText extends EventDispatcher {
 
 		// For multiline fields with lineSpacing, nudge the textarea up slightly
 		if (tf.multiline && tf.height > tf.size && this._inputElement) {
-			const sy = this._gscaleY;
-			this._inputElement.style.top = `${(-tf.lineSpacing / 2) * sy}px`;
+			this._inputElement.style.top = `${-tf.lineSpacing / 2}px`;
 		} else if (this._inputElement) {
 			this._inputElement.style.top = '0px';
 		}
 
-		// Propagate any rotation from the display hierarchy
-		let rotation = 0;
-		let node: typeof tf | undefined = tf;
-		while (node) {
-			rotation += (node as any).rotation ?? 0;
-			node = (node as any).parent;
-		}
-		this._inputDiv.style.transform = rotation !== 0 ? `rotate(${rotation}deg)` : '';
+		this._inputDiv.style.transform =
+			`matrix(${matrix.a * scaleX},${matrix.b * scaleY},${matrix.c * scaleX},${matrix.d * scaleY},${matrix.tx * scaleX},${matrix.ty * scaleY})`;
 	}
 
 	private executeShow(): void {
@@ -349,17 +294,16 @@ export class StageText extends EventDispatcher {
 	// ── Helpers ─────────────────────────────────────────────────────────────
 
 	private setAreaHeight(tf: TextField, el: HTMLElement): void {
-		const cssLineH = (tf.size + tf.lineSpacing) * this._gscaleY;
+		const cssLineH = tf.size + tf.lineSpacing;
 		if (tf.height <= tf.size) {
 			// Field shorter than font size — clamp to font height
-			el.style.height = tf.size * this._gscaleY + 'px';
+			el.style.height = tf.size + 'px';
 			el.style.padding = '0px';
 			el.style.lineHeight = cssLineH + 'px';
 		} else {
-			// Field taller than font size — use line height as content area,
-			// padding distributes the remaining space for vertical alignment.
-			el.style.height = cssLineH + 'px';
-			const rap = (tf.height - tf.size - tf.lineSpacing) * this._gscaleY;
+			// Padding distributes the remaining field height around the line box.
+			el.style.height = tf.height + 'px';
+			const rap = tf.height - tf.size - tf.lineSpacing;
 			const valign = getValign(tf);
 			const top = Math.max(0, rap * valign);
 			const bottom = Math.max(0, rap - top);
