@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Resource } from '../src/blakron/resource/Resource.js';
 import { AnalyzerBase } from '../src/blakron/resource/analyzers/AnalyzerBase.js';
 import { ResourceItem } from '../src/blakron/resource/ResourceItem.js';
+import { ResourceConfig } from '../src/blakron/resource/ResourceConfig.js';
 
 /**
  * Minimal fake XHR — same shape as HttpRequest.test.ts — used so
@@ -23,6 +24,9 @@ class FakeXHR {
 	public send = vi.fn(() => {
 		// Respond synchronously-ish (next microtask) like a resolved fetch.
 		this.status = 200;
+		if (this.response === undefined) {
+			this.response = CONFIG_JSON;
+		}
 		queueMicrotask(() => this.onload?.());
 	});
 	public abort = vi.fn();
@@ -70,12 +74,40 @@ class OrderTrackingAnalyzer extends AnalyzerBase {
 	}
 }
 
+class SubkeyTrackingAnalyzer extends AnalyzerBase {
+	public readonly loadNames: string[] = [];
+	private readonly aliases = new Map<string, unknown>();
+
+	public async loadFile(item: ResourceItem): Promise<ResourceItem> {
+		this.loadNames.push(item.name);
+		const sheet = { name: item.name };
+		this.fileDic.set(item.name, sheet);
+		this.aliases.set('button_up_png', { sheet });
+		item.loaded = true;
+		return item;
+	}
+
+	public override getRes<T = unknown>(name: string): T | undefined {
+		return (this.fileDic.get(name) ?? this.aliases.get(name)) as T | undefined;
+	}
+
+	public override hasRes(name: string): boolean {
+		return this.fileDic.has(name) || this.aliases.has(name);
+	}
+
+	public override destroyRes(name: string): boolean {
+		if (!this.fileDic.has(name)) return false;
+		this.fileDic.delete(name);
+		this.aliases.clear();
+		return true;
+	}
+}
+
 beforeEach(() => {
 	fakeXhr = new FakeXHR();
 	vi.stubGlobal(
 		'XMLHttpRequest',
 		vi.fn(function XMLHttpRequestMock() {
-			fakeXhr.response = CONFIG_JSON;
 			return fakeXhr;
 		}),
 	);
@@ -167,5 +199,58 @@ describe('Resource.loadGroup concurrency', () => {
 		expect(resource.hasRes('a1')).toBe(true);
 		expect(resource.hasRes('a2')).toBe(true);
 		expect(resource.hasRes('b1')).toBe(true);
+	});
+});
+
+describe('Resource sheet subkeys', () => {
+	it('trims subkeys and ignores empty entries when indexing a config', () => {
+		const config = new ResourceConfig();
+		config.parseConfig(
+			{
+				resources: [
+					{
+						name: 'eui',
+						type: 'sheet',
+						url: 'eui.json',
+						subkeys: ' button_up_png, ,button_down_png ',
+					},
+				],
+				groups: [],
+			},
+			'',
+		);
+
+		expect(config.getResourceItem('button_up_png')?.name).toBe('eui');
+		expect(config.getResourceItem('button_down_png')?.name).toBe('eui');
+		expect(config.hasKey('')).toBe(false);
+	});
+
+	it('tracks the parent sheet when loading by subkey', async () => {
+		const resource = new Resource();
+		const analyzer = new SubkeyTrackingAnalyzer();
+		resource.registerAnalyzer('mock-sheet', analyzer);
+
+		fakeXhr.response = JSON.stringify({
+			resources: [
+				{
+					name: 'eui',
+					type: 'mock-sheet',
+					url: 'eui.json',
+					subkeys: 'button_up_png',
+				},
+			],
+			groups: [{ name: 'preload', keys: 'eui' }],
+		});
+
+		await resource.loadConfig('resource.json');
+		await expect(resource.load('button_up_png')).resolves.toBeDefined();
+		expect(analyzer.loadNames).toEqual(['eui']);
+
+		await resource.loadGroup('preload');
+		expect(analyzer.loadNames).toEqual(['eui']);
+
+		resource.destroyAll();
+		expect(resource.hasRes('eui')).toBe(false);
+		expect(resource.hasRes('button_up_png')).toBe(false);
 	});
 });

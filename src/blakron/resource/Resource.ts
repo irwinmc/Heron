@@ -140,7 +140,11 @@ export class Resource {
 			throw new Error(`Failed to load resource "${name}" from "${item.url}".`);
 		}
 
-		this.loadedNames.add(name);
+		// A subkey resolves to its owning resource item (for example a texture
+		// name resolves to the parent sheet). Track that canonical item name so
+		// destroyAll() later destroys the complete resource instead of only the
+		// requested sub-resource.
+		this.loadedNames.add(item.name);
 		return this.get<T>(name)!;
 	}
 

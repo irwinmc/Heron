@@ -265,11 +265,15 @@ export class TextField extends DisplayObject {
 		return this._text;
 	}
 	public set text(value: string) {
-		if (this._text === value) return;
-		this._text = value;
+		// Keep the runtime API compatible with Egret/DOM text setters. JavaScript
+		// callers and EXML bindings can provide numbers, objects, or null despite
+		// the TypeScript declaration; line layout must always receive a string.
+		const normalized = value == null ? '' : String(value);
+		if (this._text === normalized) return;
+		this._text = normalized;
 		this._textFlow = undefined;
 		if (this._inputController) {
-			this._inputController.setText(value);
+			this._inputController.setText(normalized);
 		}
 		this.invalidateText();
 	}

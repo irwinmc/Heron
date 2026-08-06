@@ -4,6 +4,21 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.8] — 2026-08-06
+
+### Fixed
+
+- **TextField: normalize non-string values in `text` setter** — the setter now converts `null`, numbers, and objects to strings via `String(value)` before storing, matching Egret/DOM behaviour. Previously unexpected types could reach the line-layout engine and throw.
+- **Resource: track canonical item name for `destroyAll`** — when loading a resource by subkey (e.g. `button_up_png` resolving to the `eui` sheet), the `loadedNames` set now records the parent item name so `destroyAll()` destroys the complete sheet instead of only the requested sub-resource.
+- **ResourceConfig: trim subkeys and skip empty entries** — whitespace and empty fragments in comma-separated `subkeys` strings (`" , ,"`) no longer create spurious empty key entries.
+
+### Tests
+
+- `test/TextField.test.ts`: 1 case (non-string value normalization).
+- `test/Resource.test.ts`: 2 cases (subkey trimming, parent sheet tracking).
+
+---
+
 ## [1.0.7] — 2026-08-06
 
 ### Added

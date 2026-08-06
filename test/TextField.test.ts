@@ -30,4 +30,15 @@ describe('TextField line layout', () => {
 
 		expect(field.numLines).toBeGreaterThan(1);
 	});
+
+	it('normalizes non-string runtime values before line layout', () => {
+		const field = new TextField();
+		field.text = { label: 'Button' } as unknown as string;
+
+		expect(field.text).toBe('[object Object]');
+		expect(() => field.textWidth).not.toThrow();
+
+		field.text = null as unknown as string;
+		expect(field.text).toBe('');
+	});
 });

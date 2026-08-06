@@ -164,8 +164,9 @@ export class ResourceConfig {
 			this.keyMap.set(item.name, item);
 		}
 		if (item.subkeys) {
-			const subkeys = item.subkeys.split(',');
-			for (const key of subkeys) {
+			for (const rawKey of item.subkeys.split(',')) {
+				const key = rawKey.trim();
+				if (!key) continue;
 				if (!this.keyMap.has(key)) {
 					this.keyMap.set(key, item);
 				}
