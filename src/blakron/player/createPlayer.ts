@@ -19,6 +19,7 @@ export interface BlakronApp {
 	screenAdapter: ScreenAdapter;
 	start(root?: DisplayObject): void;
 	stop(): void;
+	destroy(): void;
 }
 
 /**
@@ -79,7 +80,8 @@ export function createPlayer(options: BlakronOptions): BlakronApp {
 	const player = new Player(canvas, stage);
 	const touchHandler = new TouchHandler(stage, canvas);
 	const screenAdapter = new ScreenAdapter(player, canvas, touchHandler, contentWidth, contentHeight);
-	setupLifecycle(stage);
+	const disposeLifecycle = setupLifecycle(stage);
+	let destroyed = false;
 
 	return {
 		player,
@@ -87,12 +89,19 @@ export function createPlayer(options: BlakronOptions): BlakronApp {
 		touchHandler,
 		screenAdapter,
 		start(root?: DisplayObject): void {
+			if (destroyed) throw new Error('Cannot start a destroyed Blakron application.');
 			player.start(root);
 		},
 		stop(): void {
 			player.stop();
+		},
+		destroy(): void {
+			if (destroyed) return;
+			destroyed = true;
+			player.destroy();
 			touchHandler.dispose();
 			screenAdapter.dispose();
+			disposeLifecycle();
 		},
 	};
 }

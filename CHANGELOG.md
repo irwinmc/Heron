@@ -4,6 +4,34 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.7] — 2026-08-06
+
+### Added
+
+- **`destroy()` on BlakronApp** — `createPlayer()` now returns a `destroy()` method that tears down the player, touch handler, screen adapter, and lifecycle listener in one call. `stop()` is now purely resumable (no longer disposes resources); disposal is deferred to `destroy()`. Calling `start()` after `destroy()` throws.
+- **ResourceLoader: stable monotonic progress** — replaced the broken `activeCount` / `(total + loaded)` formula with `completedCount` / `totalCount`. Consumer callbacks (`onComplete`, `onError`, `onProgress`) are now wrapped in a `safeNotify` try/catch so exceptions in user code do not corrupt loader bookkeeping or stall the queue.
+
+### Fixed
+
+- **TouchHandler: mouse drag tracking outside canvas** — moved `mousemove`/`mouseup` listeners from `canvas` to `window`, so drag interactions continue tracking after the pointer leaves the canvas bounds. `dispose()` now clears `_touchDownTarget` and resets `_useTouchesCount`.
+- **SystemTicker: `setupLifecycle` returns a dispose function** — previously the `visibilitychange` listener was registered with no way to remove it. Now returns a cleanup function that calls `removeEventListener`.
+
+### Tests
+
+- `test/CreatePlayer.test.ts` — new (1 case: destroy lifecycle + stop resumability).
+- `test/ResourceLoader.test.ts` — 2 cases (monotonic progress, consumer callback exception resilience).
+- `test/TouchHandler.test.ts` — new (1 case: mouse interaction ended outside canvas).
+
+---
+
+## [1.0.6] — 2026-08-06
+
+### Fixed
+
+- **StageText: single-line height alignment** — replaced the padding-based vertical alignment with explicit `top` + `height` positioning. The previous approach used `padding` to distribute remaining space, which could push text outside the visible area when the field height exceeded the font size.
+
+---
+
 ## [1.0.5] — 2026-08-06
 
 ### Changed

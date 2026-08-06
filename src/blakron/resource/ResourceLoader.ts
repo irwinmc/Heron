@@ -33,6 +33,8 @@ export class ResourceLoader {
 	private retryDic: Map<string, number> = new Map<string, number>();
 	private analyzerMap: Map<string, AnalyzerBase> = new Map<string, AnalyzerBase>();
 	private activeCount = 0;
+	private totalCount = 0;
+	private completedCount = 0;
 
 	// ── Public API ─────────────────────────────────────────────────────────
 
@@ -49,6 +51,9 @@ export class ResourceLoader {
 	public loadResourceList(list: ResourceItem[]): void {
 		this.pendingList = list.slice();
 		this.loadingList = [];
+		this.retryDic.clear();
+		this.totalCount = list.length;
+		this.completedCount = 0;
 	}
 
 	/**
@@ -128,14 +133,18 @@ export class ResourceLoader {
 			return;
 		}
 
-		result
-			.then(r => {
+		// Use the rejection callback of then(), rather than a chained catch().
+		// Exceptions from completion callbacks must not be mistaken for an
+		// analyzer failure and retire the same item twice.
+		result.then(
+			r => {
 				this.finishItem(r);
-			})
-			.catch(() => {
+			},
+			() => {
 				item.loaded = false;
 				this.finishItem(item);
-			});
+			},
+		);
 	}
 
 	/**
@@ -155,11 +164,10 @@ export class ResourceLoader {
 	}
 
 	private onItemComplete(item: ResourceItem): void {
+		this.completedCount++;
 		this.reportProgress();
 
-		if (this.onComplete) {
-			this.onComplete(item);
-		}
+		this.safeNotify(() => this.onComplete?.(item));
 
 		this.next();
 	}
@@ -174,19 +182,21 @@ export class ResourceLoader {
 		}
 
 		// Retries exhausted
-		if (this.onError) {
-			this.onError(item);
-		}
-
+		this.completedCount++;
+		this.safeNotify(() => this.onError?.(item));
 		this.reportProgress();
 		this.next();
 	}
 
 	private reportProgress(): void {
-		if (this.onProgress) {
-			const total = this.pendingList.length + this.loadingList.length + this.activeCount;
-			const loaded = total > 0 ? this.activeCount : 0;
-			this.onProgress(loaded, total + loaded);
+		this.safeNotify(() => this.onProgress?.(this.completedCount, this.totalCount));
+	}
+
+	private safeNotify(callback: () => void): void {
+		try {
+			callback();
+		} catch {
+			// Consumer callbacks must not corrupt loader bookkeeping or stall the queue.
 		}
 	}
 }

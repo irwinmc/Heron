@@ -184,4 +184,39 @@ describe('ResourceLoader', () => {
 		await loader.start();
 		expect(maxConcurrent).toBeLessThanOrEqual(2);
 	});
+
+	it('reports stable monotonic completed/total progress', async () => {
+		const loader = new ResourceLoader();
+		loader.registerAnalyzer('ok', new OkAnalyzer());
+		loader.loadResourceList([
+			new ResourceItem('a', 'a.png', 'ok'),
+			new ResourceItem('b', 'b.png', 'ok'),
+			new ResourceItem('c', 'c.png', 'ok'),
+		]);
+		const progress: Array<[number, number]> = [];
+		loader.onProgress = (loaded, total) => progress.push([loaded, total]);
+
+		await loader.start();
+
+		expect(progress).toEqual([[1, 3], [2, 3], [3, 3]]);
+	});
+
+	it('does not finish an item twice when a consumer callback throws', async () => {
+		const loader = new ResourceLoader();
+		loader.threadCount = 1;
+		loader.registerAnalyzer('ok', new OkAnalyzer());
+		loader.loadResourceList([
+			new ResourceItem('a', 'a.png', 'ok'),
+			new ResourceItem('b', 'b.png', 'ok'),
+		]);
+		let completed = 0;
+		loader.onComplete = () => {
+			completed++;
+			throw new Error('consumer failure');
+		};
+
+		await loader.start();
+
+		expect(completed).toBe(2);
+	});
 });

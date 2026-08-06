@@ -233,8 +233,8 @@ export function getTimer(): number {
  * Sets up visibility change listeners to dispatch ACTIVATE/DEACTIVATE
  * events on the stage when the page is hidden/shown.
  */
-export function setupLifecycle(stage: import('../display/Stage.js').Stage): void {
-	document.addEventListener('visibilitychange', () => {
+export function setupLifecycle(stage: import('../display/Stage.js').Stage): () => void {
+	const onVisibilityChange = (): void => {
 		if (document.hidden) {
 			ticker.pause();
 			stage.dispatchEventWith(Event.DEACTIVATE);
@@ -242,5 +242,7 @@ export function setupLifecycle(stage: import('../display/Stage.js').Stage): void
 			ticker.resume();
 			stage.dispatchEventWith(Event.ACTIVATE);
 		}
-	});
+	};
+	document.addEventListener('visibilitychange', onVisibilityChange);
+	return () => document.removeEventListener('visibilitychange', onVisibilityChange);
 }

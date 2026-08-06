@@ -51,8 +51,10 @@ export class TouchHandler {
 		this._canvas.removeEventListener('touchend', this.onTouchEndEvent);
 		this._canvas.removeEventListener('touchcancel', this.onTouchEndEvent);
 		this._canvas.removeEventListener('mousedown', this.onMouseDown);
-		this._canvas.removeEventListener('mousemove', this.onMouseMove);
-		this._canvas.removeEventListener('mouseup', this.onMouseUp);
+		window.removeEventListener('mousemove', this.onMouseMove);
+		window.removeEventListener('mouseup', this.onMouseUp);
+		this._touchDownTarget.clear();
+		this._useTouchesCount = 0;
 	}
 
 	// ── Touch event handlers ──────────────────────────────────────────────────
@@ -128,8 +130,9 @@ export class TouchHandler {
 		this._canvas.addEventListener('touchend', this.onTouchEndEvent);
 		this._canvas.addEventListener('touchcancel', this.onTouchEndEvent);
 		this._canvas.addEventListener('mousedown', this.onMouseDown);
-		this._canvas.addEventListener('mousemove', this.onMouseMove);
-		this._canvas.addEventListener('mouseup', this.onMouseUp);
+		// Keep tracking an active drag after the pointer leaves the canvas.
+		window.addEventListener('mousemove', this.onMouseMove);
+		window.addEventListener('mouseup', this.onMouseUp);
 	}
 
 	private onTouchStartEvent = (e: globalThis.TouchEvent): void => {
