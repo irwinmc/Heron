@@ -842,6 +842,15 @@ export class WebGLRenderer {
 					$displayList.offsetY,
 				);
 				$displayList.updateBitmapData();
+				// The DisplayList keeps the same BitmapData and canvas identity
+				// between cache refreshes. getWebGLTexture() therefore reuses the
+				// existing GPU texture, but an offscreen canvas does not upload its
+				// changed pixels automatically. Refresh it explicitly so resized or
+				// re-rendered cache content is sampled at its current dimensions.
+				const bitmapData = $displayList.bitmapData;
+				if (bitmapData?.webGLTexture && bitmapData.source) {
+					buffer.context.updateTexture(bitmapData.webGLTexture, bitmapData.source as HTMLCanvasElement);
+				}
 			}
 			obj.$cacheDirty = false;
 			obj.$renderDirty = false;
