@@ -123,6 +123,8 @@ export class CanvasRenderer {
 			if (displayObject.$cacheDirty || displayObject.$renderDirty) {
 				if ($displayList.updateSurfaceSize()) {
 					$displayList.renderBuffer.clear();
+					const resolution = $displayList.actualResolution;
+					$displayList.renderBuffer.context.setTransform(resolution, 0, 0, resolution, 0, 0);
 					this.drawDisplayObject(
 						displayObject,
 						$displayList.renderBuffer.context,
@@ -137,11 +139,17 @@ export class CanvasRenderer {
 			}
 			// Draw cached result and skip $children
 			if ($displayList.bitmapData?.source) {
+				const resolution = $displayList.actualResolution;
+				const previousSmoothing = ctx.imageSmoothingEnabled;
+				ctx.imageSmoothingEnabled = $displayList.scaleMode === 'linear';
 				ctx.drawImage(
 					$displayList.bitmapData.source as CanvasImageSource,
 					offsetX - $displayList.offsetX,
 					offsetY - $displayList.offsetY,
+					$displayList.renderBuffer.width / resolution,
+					$displayList.renderBuffer.height / resolution,
 				);
+				ctx.imageSmoothingEnabled = previousSmoothing;
 				drawCalls++;
 			}
 			return drawCalls;

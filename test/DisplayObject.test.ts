@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { DisplayObject, RenderMode } from '../src/blakron/display/DisplayObject.js';
+import { DisplayObjectContainer } from '../src/blakron/display/DisplayObjectContainer.js';
 import { Rectangle } from '../src/blakron/geom/Rectangle.js';
 import { Matrix } from '../src/blakron/geom/Matrix.js';
 import { BlurFilter } from '../src/blakron/filters/BlurFilter.js';
@@ -7,13 +8,27 @@ import { Event } from '../src/blakron/events/Event.js';
 import { TouchEvent } from '../src/blakron/events/TouchEvent.js';
 import { FocusEvent } from '../src/blakron/events/FocusEvent.js';
 
+class BoundedChild extends DisplayObject {
+	public override $measureContentBounds(bounds: Rectangle): void {
+		bounds.setTo(0, 0, 10, 10);
+	}
+}
+
+beforeEach(() => {
+	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D);
+});
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
 describe('DisplayObject', () => {
-	it('x/y setter triggers $renderDirty', () => {
+	it('x/y setter marks transform without invalidating render content', () => {
 		const obj = new DisplayObject();
 		obj.$renderDirty = false;
 		obj.x = 10;
 		expect(obj.x).toBe(10);
-		expect(obj.$renderDirty).toBe(true);
+		expect(obj.$renderDirty).toBe(false);
 	});
 
 	it('x setter no-op for same value', () => {
@@ -40,12 +55,12 @@ describe('DisplayObject', () => {
 		expect(obj.$useTranslate).toBe(true);
 	});
 
-	it('alpha setter triggers $markDirty', () => {
+	it('alpha setter marks transform without invalidating render content', () => {
 		const obj = new DisplayObject();
 		obj.$renderDirty = false;
 		obj.alpha = 0.5;
 		expect(obj.alpha).toBe(0.5);
-		expect(obj.$renderDirty).toBe(true);
+		expect(obj.$renderDirty).toBe(false);
 	});
 
 	it('visible=false sets $renderMode NONE', () => {
@@ -121,6 +136,64 @@ describe('DisplayObject', () => {
 		obj.x = 99;
 		expect(fn).toHaveBeenCalledWith(obj);
 		DisplayObject.$onRenderableDirty = prev;
+	});
+
+	it('cacheAsTexture exposes the modern cache lifecycle while cacheAsBitmap stays compatible', () => {
+		const obj = new DisplayObject();
+		obj.cacheAsTexture({ resolution: 2, scaleMode: 'nearest' });
+		expect(obj.cacheAsBitmap).toBe(true);
+		expect(obj.isCachedAsTexture).toBe(true);
+		expect(obj.$displayList?.resolution).toBe(2);
+		expect(obj.$displayList?.scaleMode).toBe('nearest');
+
+		obj.cacheAsBitmap = false;
+		expect(obj.isCachedAsTexture).toBe(false);
+		expect(obj.$displayList).toBeUndefined();
+	});
+
+	it('moving a cached root reuses its pixels but invalidates a cached parent', () => {
+		const parent = new DisplayObjectContainer();
+		const child = new DisplayObject();
+		parent.addChild(child);
+		parent.cacheAsBitmap = true;
+		child.cacheAsBitmap = true;
+		parent.$cacheDirty = false;
+		child.$cacheDirty = false;
+		child.$renderDirty = false;
+
+		child.x = 20;
+
+		expect(child.$cacheDirty).toBe(false);
+		expect(child.$renderDirty).toBe(false);
+		expect(parent.$cacheDirty).toBe(true);
+	});
+
+	it('moving a child invalidates its direct parent bounds for cache resizing', () => {
+		const parent = new DisplayObjectContainer();
+		const child = new BoundedChild();
+		parent.addChild(child);
+		expect(parent.$getOriginalBounds().x).toBe(0);
+
+		parent.$cacheDirty = false;
+		child.x = 40;
+
+		expect(parent.$getOriginalBounds().x).toBe(40);
+		expect(parent.$getOriginalBounds().width).toBe(10);
+	});
+
+	it('updateCacheTexture explicitly invalidates cached pixels and cached ancestors', () => {
+		const parent = new DisplayObjectContainer();
+		const child = new DisplayObject();
+		parent.addChild(child);
+		parent.cacheAsBitmap = true;
+		child.cacheAsBitmap = true;
+		parent.$cacheDirty = false;
+		child.$cacheDirty = false;
+
+		child.updateCacheTexture();
+
+		expect(child.$cacheDirty).toBe(true);
+		expect(parent.$cacheDirty).toBe(true);
 	});
 
 	it('$onStructureChange callback is called on $renderMode change', () => {

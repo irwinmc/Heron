@@ -4,6 +4,25 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.9] — 2026-08-06
+
+### Added
+
+- **`cacheAsTexture()` with resolution and scaleMode** — new PixiJS-style cache API (`options: { resolution, scaleMode }`) with Egret-compatible `cacheAsBitmap` as a boolean alias. `isCachedAsTexture` and `updateCacheTexture()` provide fine-grained control over the cached subtree.
+- **Resolution-aware offscreen rendering** — `DisplayList` now supports `resolution` and `actualResolution`, scaled to fit within `maxTextureSize`. Both `CanvasRenderer` and `WebGLRenderer` apply the resolution scale when drawing cached bitmaps, and `scaleMode` controls `imageSmoothingEnabled` / GL filtering.
+
+### Changed
+
+- **Precision dirtying: `$markTransformDirty`** — transform-affecting setters (`x`, `y`, `scaleX`, `scaleY`, `rotation`, `skew`, `alpha`, `visible`, `tint`, `anchorOffset`) now call `$markTransformDirty()` instead of `$markDirty()`, avoiding unnecessary texture regeneration on cached display objects that have only moved or recoloured. `$markDirty` now delegates to `$markTransformDirty` plus sets `$renderDirty`.
+- **DisplayList pool capped at 8** — recycled DisplayList objects are now limited to a pool of 8 to prevent unbounded memory growth.
+- **DisplayList `release()` releases WebGL textures** — cached bitmaps now properly free their GPU resources when returned to the pool.
+
+### Tests
+
+- `test/DisplayObject.test.ts`: expanded with cache-texture resolution and scaleMode coverage.
+
+---
+
 ## [1.0.8] — 2026-08-06
 
 ### Fixed

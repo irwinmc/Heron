@@ -49,6 +49,14 @@ export interface DisplayObjectEvents extends EventMap {
 	[FocusEvent.FOCUS_OUT]: FocusEvent;
 }
 
+/** Options for caching a display subtree as one reusable texture. */
+export interface CacheAsTextureOptions {
+	/** Raster resolution. Higher values improve sharpness at a memory cost. */
+	resolution?: number;
+	/** Sampling mode used when the cached texture is scaled. */
+	scaleMode?: 'linear' | 'nearest';
+}
+
 function clampRotation(value: number): number {
 	value %= 360;
 	if (value > 180) {
@@ -307,11 +315,34 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 	}
 
 	public get cacheAsBitmap(): boolean {
-		return this.$cacheAsBitmap;
+		return this.isCachedAsTexture;
 	}
 	public set cacheAsBitmap(value: boolean) {
-		this.$cacheAsBitmap = value;
-		this.$setHasDisplayList(value);
+		this.cacheAsTexture(value);
+	}
+
+	/** PixiJS-style cache API. `cacheAsBitmap` remains an Egret-compatible alias. */
+	public cacheAsTexture(value: boolean | CacheAsTextureOptions): void {
+		if (value === false) {
+			this.$cacheAsBitmap = false;
+			this.$setHasDisplayList(false);
+			return;
+		}
+		this.$cacheAsBitmap = true;
+		this.$setHasDisplayList(true);
+		this.$displayList?.configure(value === true ? {} : value);
+		this.updateCacheTexture();
+	}
+
+	/** Marks cached content for regeneration on the next render. */
+	public updateCacheTexture(): void {
+		if (!this.$displayList) return;
+		this.$cacheDirty = true;
+		this.$cacheDirtyUp();
+	}
+
+	public get isCachedAsTexture(): boolean {
+		return !!this.$displayList;
 	}
 
 	public get filters(): Filter[] {
@@ -370,7 +401,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 	public set tint(value: number) {
 		this._tint = typeof value === 'number' && value >= 0 && value <= 0xffffff ? value : 0xffffff;
 		this.$tintRGB = (this._tint >> 16) + (this._tint & 0xff00) + ((this._tint & 0xff) << 16);
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	public get zIndex(): number {
@@ -570,7 +601,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 			this._skewYdeg = clampRotation((this._skewY * 180) / Math.PI);
 			this._rotation = clampRotation((this._skewY * 180) / Math.PI);
 		}
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$getConcatenatedMatrix(): Matrix {
@@ -607,7 +638,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 			return false;
 		}
 		this.$x = value;
-		this.$markDirty();
+		this.$markTransformDirty();
 		return true;
 	}
 
@@ -616,7 +647,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 			return false;
 		}
 		this.$y = value;
-		this.$markDirty();
+		this.$markTransformDirty();
 		return true;
 	}
 
@@ -627,7 +658,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		this._scaleX = value;
 		this._matrixDirty = true;
 		this.$updateUseTransform();
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setScaleY(value: number): void {
@@ -637,7 +668,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		this._scaleY = value;
 		this._matrixDirty = true;
 		this.$updateUseTransform();
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setRotation(value: number): void {
@@ -651,7 +682,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		this._rotation = value;
 		this._matrixDirty = true;
 		this.$updateUseTransform();
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setSkewX(value: number): void {
@@ -662,7 +693,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		this._skewX = (clampRotation(value) / 180) * Math.PI;
 		this._matrixDirty = true;
 		this.$updateUseTransform();
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setSkewY(value: number): void {
@@ -673,7 +704,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		this._skewY = ((clampRotation(value) + this._rotation) / 180) * Math.PI;
 		this._matrixDirty = true;
 		this.$updateUseTransform();
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setAnchorOffsetX(value: number): void {
@@ -681,7 +712,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 			return;
 		}
 		this.$anchorOffsetX = value;
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setAnchorOffsetY(value: number): void {
@@ -689,7 +720,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 			return;
 		}
 		this.$anchorOffsetY = value;
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setVisible(value: boolean): void {
@@ -698,7 +729,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		}
 		this.$visible = value;
 		this.$updateRenderMode();
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setAlpha(value: number): void {
@@ -707,7 +738,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		}
 		this.$alpha = value;
 		this.$updateRenderMode();
-		this.$markDirty();
+		this.$markTransformDirty();
 	}
 
 	$setScrollRect(value: Rectangle | undefined): void {
@@ -943,6 +974,11 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 
 	$markDirty(): void {
 		this.$renderDirty = true;
+		this.$markTransformDirty();
+	}
+
+	/** Marks world placement/color dirty without invalidating this object's cached pixels. */
+	$markTransformDirty(): void {
 		this._boundsDirty = true;
 
 		// Update cached world alpha and tint so _refreshLeafTransform can read
@@ -965,6 +1001,7 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		const parent = this.$parent;
 		if (parent && !parent.$cacheDirty) {
 			parent.$cacheDirty = true;
+			parent._boundsDirty = true;
 			parent.$cacheDirtyUp();
 		}
 		if (parent && !parent.$renderDirty) {

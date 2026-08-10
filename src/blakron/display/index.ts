@@ -5,7 +5,13 @@ export { GradientType } from './enums/GradientType.js';
 export { JointStyle } from './enums/JointStyle.js';
 export { OrientationMode } from './enums/OrientationMode.js';
 export { StageScaleMode } from './enums/StageScaleMode.js';
-export { DisplayObject, RenderMode, RenderObjectType, type DisplayObjectEvents } from './DisplayObject.js';
+export {
+	DisplayObject,
+	RenderMode,
+	RenderObjectType,
+	type DisplayObjectEvents,
+	type CacheAsTextureOptions,
+} from './DisplayObject.js';
 export { DisplayObjectContainer } from './DisplayObjectContainer.js';
 export { Stage } from './Stage.js';
 export { Graphics, setGraphicsHitTest } from './Graphics.js';
