@@ -4,6 +4,22 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.12] — 2026-08-12
+
+This release simplifies renderer initialization before the engine enters feature development. `Player` now attempts WebGL directly on the application canvas instead of creating a second temporary WebGL context solely for capability detection.
+
+### Changed
+
+- **Direct WebGL initialization** — `Player` now requests `webgl2`, then `webgl`, on the supplied application canvas. If both fail, initialization falls through to the existing Canvas 2D renderer.
+- **No probe canvas allocation** — removed `Player`'s call to `checkWebGLSupport()`, avoiding a redundant temporary canvas and WebGL context that could consume resources or produce a false fallback on constrained devices. The exported utility remains available for compatibility.
+- **README refresh** — documents the WebGL/Canvas backend boundary, internal Canvas rasterization duties, current 1.0.12 feature set, committed architecture/resource references, and the latest test pages.
+
+### Tests
+
+- `test/CreatePlayer.test.ts` — expanded: verifies the supplied canvas receives the `webgl2` → `webgl` → `2d` initialization sequence and that no separate WebGL probe canvas is created.
+
+---
+
 ## [1.0.11] — 2026-08-12
 
 This release hardens pooled WebGL resource lifecycles after the 1.0.10 rendering-pipeline work. It prevents stale offscreen state from leaking between effects and keeps dynamically sized blur resources within a fixed GPU-memory bound.

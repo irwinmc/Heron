@@ -2,18 +2,19 @@
 
 A modern rewrite of the Egret game engine. Maintains Egret-compatible display object and event APIs while upgrading the rendering architecture, type safety, and tooling.
 
-> **Stable (1.0.3).** Targets ES2022 and evergreen browsers (Chrome / Edge / Firefox / Safari). No IE / old-Android / pre-2022 Safari support shims.
+> **Stable (1.0.12).** Targets ES2022 and evergreen browsers (Chrome / Edge / Firefox / Safari). No IE / old-Android / pre-2022 Safari support shims.
 
 ## Features
 
 **Rendering Engine**
 
-- WebGL-first with automatic Canvas 2D fallback
-- InstructionSet-driven pipeline (Build → Execute two-phase, inspired by Pixi.js 8)
+- WebGL-first with automatic Canvas 2D fallback when WebGL initialization fails
+- WebGL-only InstructionSet pipeline (Build → Execute two-phase, inspired by Pixi.js 8)
 - Multi-texture batching (up to 8 textures per draw call)
-- RenderGroup layers — zero traversal cost for static subtrees
+- RenderGroup layers — localize instruction rebuilds to the affected subtree
 - Filters: Blur (ping-pong dual-pass), Glow, DropShadow, ColorMatrix, custom shaders
 - Masks: automatic selection between scissor / stencil / offscreen compositing
+- PixiJS-style `cacheAsTexture()` plus Egret-compatible `cacheAsBitmap`
 - WebGL Context Lost recovery
 
 **Display Objects**
@@ -21,7 +22,7 @@ A modern rewrite of the Egret game engine. Maintains Egret-compatible display ob
 - Full scene graph: DisplayObject → Container → Sprite → Stage
 - Bitmap (with scale9Grid), Shape, Mesh, TextField, BitmapText, Video
 - Graphics vector drawing (rect, circle, ellipse, arc, bezier, gradients, dashed lines)
-- cacheAsBitmap, tint, skew, zIndex sorting
+- cacheAsBitmap / cacheAsTexture, tint, skew, zIndex sorting
 
 **Event System**
 
@@ -36,7 +37,18 @@ A modern rewrite of the Egret game engine. Maintains Egret-compatible display ob
 - HttpRequest / ImageLoader networking
 - Sound (Web Audio + HTML Audio fallback) / Video playback
 - ByteArray / Timer / Logger / FontManager / LocalStorage
-- Full `strict: true` TypeScript, zero `any`
+- Full `strict: true` TypeScript across runtime APIs
+
+### Rendering Backends
+
+`Player` tries `webgl2` and then `webgl` directly on the supplied canvas. If both context types fail to initialize, it falls back to the Canvas 2D renderer. No temporary canvas is created solely to probe WebGL support.
+
+```typescript
+const app = createPlayer({ canvas });
+console.log(app.player.isWebGL ? 'WebGL' : 'Canvas 2D');
+```
+
+The flat InstructionSet pipeline and multi-texture batching apply to the WebGL backend. The full-scene Canvas fallback uses direct display-tree traversal. Canvas support is still part of the normal WebGL path: text, Graphics, RenderTexture, and pixel hit testing may be rasterized through Canvas before being uploaded or composited by WebGL.
 
 **Migrating from Egret (1.0.0 breaking changes)**
 
@@ -97,6 +109,9 @@ rect.graphics.endFill();
 rect.x = 100;
 rect.y = 100;
 root.addChild(rect);
+
+// stop() is resumable; destroy() performs final lifecycle cleanup.
+// app.destroy();
 ```
 
 ## Development
@@ -104,16 +119,17 @@ root.addChild(rect);
 ```bash
 pnpm install
 pnpm run build        # compile
-pnpm run test         # run tests (583 cases)
+pnpm run test         # run tests (634 cases)
 pnpm run dev          # watch mode
 ```
 
 ## Documentation
 
 - [CHANGELOG.md](./CHANGELOG.md) — versioned release notes, including the full list of 1.0.0 breaking changes
-- [Architecture](https://irwinmc.github.io/blakron-demo/) — live demo of rendering features
-
-> The pre-1.0 `docs/architecture.md` and `docs/resource.md` were local-only and not committed; they are being rewritten for 1.x. If you need a specific reference, open an issue.
+- [Architecture](./docs/architecture.md) — engine structure and rendering pipeline
+- [Resource system](./docs/resource.md) — resource configuration, loading, and lifecycle
+- [PixiJS alignment](./docs/pixi-alignment.md) — rendering concepts adopted from PixiJS and intentional differences
+- [Live demo](https://irwinmc.github.io/blakron-demo/) — interactive rendering examples
 
 ## Test Pages
 
@@ -125,7 +141,7 @@ pnpm benchmark
 
 | Page            | Description                                                          |
 | --------------- | -------------------------------------------------------------------- |
-| **Visual Test** | 18 cases: Shape, Graphics, Filters, Mask, RenderGroup, Animation     |
+| **Visual Test** | 19 cases: Shape, Graphics, Filters, Mask, RenderGroup, Animation     |
 | **Bitmap Test** | Bitmap rendering: scale, rotation, SpriteSheet, scale9Grid, batching |
 | **Mesh Test**   | Mesh deformation: Quad / Fan / Grid presets, Wave / Ripple / Twist   |
 | **Sound Test**  | Sound / SoundChannel: load, play, volume, loop, error handling       |
