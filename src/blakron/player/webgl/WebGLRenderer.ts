@@ -39,13 +39,14 @@ interface TransformState {
 
 // ── Augmented instruction types ───────────────────────────────────────────────
 
-type LeafInstruction = (
+type BaseLeafInstruction =
 	| BitmapInstruction
 	| GraphicsInstruction
 	| MeshInstruction
 	| TextInstruction
-	| ParticleInstruction
-) & {
+	| ParticleInstruction;
+
+type LeafInstruction = BaseLeafInstruction & {
 	transform: TransformState;
 };
 
@@ -105,7 +106,7 @@ export class WebGLRenderer {
 	private readonly _meshPipe: MeshPipe;
 	private readonly _textPipe: TextPipe;
 	private readonly _filterPipe = new FilterPipe();
-	private readonly _maskPipe = new MaskPipe();
+	private readonly _maskPipe: MaskPipe;
 	private readonly _particlePipe = new ParticlePipe();
 
 	// ── Instruction set ───────────────────────────────────────────────────────
@@ -129,6 +130,9 @@ export class WebGLRenderer {
 		this._graphicsPipe = new GraphicsPipe(this._canvasRenderer);
 		this._meshPipe = new MeshPipe();
 		this._textPipe = new TextPipe(this._canvasRenderer);
+		this._maskPipe = new MaskPipe((obj, buffer, offsetX, offsetY) => {
+			this._directDraw(obj, buffer, offsetX, offsetY);
+		});
 	}
 
 	// ── Public entry point ────────────────────────────────────────────────────
@@ -326,69 +330,71 @@ export class WebGLRenderer {
 		offsetX: number,
 		offsetY: number,
 	): void {
+		const instruction = this._createLeafInstruction(obj, offsetX, offsetY);
+		if (!instruction) return;
 		const transform = this._snapshotTransform(buffer, offsetX, offsetY);
+		set.addLeaf(Object.assign(instruction, { transform }) as LeafInstruction);
+	}
 
+	/**
+	 * Map one renderable DisplayObject to its pipe-specific leaf instruction.
+	 * Returns undefined for plain containers and empty Sprite graphics.
+	 */
+	private _createLeafInstruction(
+		obj: DisplayObject,
+		offsetX: number,
+		offsetY: number,
+	): BaseLeafInstruction | undefined {
 		switch (obj.$renderObjectType) {
 			case RenderObjectType.MESH:
-				set.addLeaf({
+				return {
 					renderPipeId: 'mesh',
 					renderable: obj as Mesh,
 					offsetX,
 					offsetY,
-					transform,
-				} as LeafInstruction);
-				break;
+				};
 			case RenderObjectType.BITMAP:
-				set.addLeaf({
+				return {
 					renderPipeId: 'bitmap',
 					renderable: obj as Bitmap,
 					offsetX,
 					offsetY,
-					transform,
-				} as LeafInstruction);
-				break;
+				};
 			case RenderObjectType.SHAPE:
-				set.addLeaf({
+				return {
 					renderPipeId: 'graphics',
 					renderable: obj,
 					graphics: (obj as Shape).graphics,
 					offsetX,
 					offsetY,
-					transform,
-				} as LeafInstruction);
-				break;
+				};
 			case RenderObjectType.TEXT:
-				set.addLeaf({
+				return {
 					renderPipeId: 'text',
-					renderable: obj,
+					renderable: obj as TextField,
 					offsetX,
 					offsetY,
-					transform,
-				} as LeafInstruction);
-				break;
+				};
 			case RenderObjectType.SPRITE: {
 				const sprite = obj as Sprite;
-				if (sprite.graphics.commands.length > 0) {
-					set.addLeaf({
-						renderPipeId: 'graphics',
-						renderable: obj,
-						graphics: sprite.graphics,
-						offsetX,
-						offsetY,
-						transform,
-					} as LeafInstruction);
-				}
-				break;
+				if (sprite.graphics.commands.length === 0) return undefined;
+				return {
+					renderPipeId: 'graphics',
+					renderable: obj,
+					graphics: sprite.graphics,
+					offsetX,
+					offsetY,
+				};
 			}
 			case RenderObjectType.PARTICLE:
-				set.addLeaf({
+				return {
 					renderPipeId: 'particle',
 					renderable: obj,
 					offsetX,
 					offsetY,
-					transform,
-				} as LeafInstruction);
-				break;
+				};
+			default:
+				return undefined;
 		}
 	}
 
@@ -728,34 +734,14 @@ export class WebGLRenderer {
 
 			switch (inst.renderPipeId) {
 				// ── Leaf nodes ────────────────────────────────────────────────
-				case 'bitmap': {
-					const leaf = inst as LeafInstruction & BitmapInstruction;
-					this._applyTransform(activeBuffer, leaf.transform);
-					this._bitmapPipe.execute(leaf, activeBuffer);
-					break;
-				}
-				case 'mesh': {
-					const leaf = inst as LeafInstruction & MeshInstruction;
-					this._applyTransform(activeBuffer, leaf.transform);
-					this._meshPipe.execute(leaf, activeBuffer);
-					break;
-				}
-				case 'graphics': {
-					const leaf = inst as LeafInstruction & GraphicsInstruction;
-					this._applyTransform(activeBuffer, leaf.transform);
-					this._graphicsPipe.execute(leaf, activeBuffer);
-					break;
-				}
-				case 'text': {
-					const leaf = inst as LeafInstruction & TextInstruction;
-					this._applyTransform(activeBuffer, leaf.transform);
-					this._textPipe.execute(leaf, activeBuffer);
-					break;
-				}
+				case 'bitmap':
+				case 'mesh':
+				case 'graphics':
+				case 'text':
 				case 'particle': {
-					const leaf = inst as LeafInstruction & ParticleInstruction;
+					const leaf = inst as LeafInstruction;
 					this._applyTransform(activeBuffer, leaf.transform);
-					this._particlePipe.execute(leaf, activeBuffer);
+					this._executeLeafInstruction(leaf, activeBuffer);
 					break;
 				}
 
@@ -816,7 +802,7 @@ export class WebGLRenderer {
 						scissorStack.push(usedScissor);
 						offscreenStack.push(undefined);
 					} else {
-						const displayBuffer = this._maskPipe.executeClipPush(push, activeBuffer, this);
+						const displayBuffer = this._maskPipe.executeClipPush(push, activeBuffer);
 						offscreenStack.push(displayBuffer);
 						if (displayBuffer) {
 							this._configureOffscreenTransform(displayBuffer, push.renderable.$getOriginalBounds(), pushT);
@@ -840,11 +826,34 @@ export class WebGLRenderer {
 									? (offscreenStack[offscreenStack.length - 1] ?? buffer)
 									: buffer;
 						this._applyTransform(activeBuffer, (pop.push as EffectPushInstruction).transform);
-						this._maskPipe.executeClipPop(pop, activeBuffer, displayBuffer, this);
+						this._maskPipe.executeClipPop(pop, activeBuffer, displayBuffer);
 					}
 					break;
 				}
 			}
+		}
+	}
+
+	/**
+	 * Execute one leaf instruction through its owning render pipe.
+	 */
+	private _executeLeafInstruction(instruction: BaseLeafInstruction, buffer: WebGLRenderBuffer): void {
+		switch (instruction.renderPipeId) {
+			case 'bitmap':
+				this._bitmapPipe.execute(instruction, buffer);
+				break;
+			case 'mesh':
+				this._meshPipe.execute(instruction, buffer);
+				break;
+			case 'graphics':
+				this._graphicsPipe.execute(instruction, buffer);
+				break;
+			case 'text':
+				this._textPipe.execute(instruction, buffer);
+				break;
+			case 'particle':
+				this._particlePipe.execute(instruction, buffer);
+				break;
 		}
 	}
 
@@ -983,22 +992,10 @@ export class WebGLRenderer {
 		}
 	}
 
-	// ── Public accessor for MaskPipe (needs to call _drawDisplayObject) ───────
-
-	/**
-	 * @internal Used by MaskPipe.executeClipPush() to render mask objects
-	 * into offscreen buffers during the execute phase.
-	 */
-	public _drawDisplayObject(obj: DisplayObject, buffer: WebGLRenderBuffer, offsetX: number, offsetY: number): number {
-		// For mask rendering we do a direct (non-instruction-set) traversal
-		// into the offscreen buffer — this is the same as the old approach.
-		return this._directDraw(obj, buffer, offsetX, offsetY);
-	}
-
 	/**
 	 * Draw `obj` and its subtree directly into `buffer`, bypassing the
-	 * InstructionSet. Used for offscreen mask/filter buffers, which are
-	 * rendered on demand rather than through the main build/execute pass.
+	 * InstructionSet. Used for mask objects, which are rendered on demand
+	 * during mask compositing rather than added to the main instruction set.
 	 * Returns the number of draw calls issued.
 	 */
 	private _directDraw(obj: DisplayObject, buffer: WebGLRenderBuffer, offsetX: number, offsetY: number): number {
@@ -1010,73 +1007,10 @@ export class WebGLRenderer {
 			buffer.globalMatrix.append(1, 0, 0, 1, offsetX, offsetY);
 		}
 
-		switch (obj.$renderObjectType) {
-			case RenderObjectType.MESH: {
-				const inst: MeshInstruction = { renderPipeId: 'mesh', renderable: obj as Mesh, offsetX: 0, offsetY: 0 };
-				this._meshPipe.execute(inst, buffer);
-				drawCalls++;
-				break;
-			}
-			case RenderObjectType.BITMAP: {
-				const inst: BitmapInstruction = {
-					renderPipeId: 'bitmap',
-					renderable: obj as Bitmap,
-					offsetX: 0,
-					offsetY: 0,
-				};
-				this._bitmapPipe.execute(inst, buffer);
-				drawCalls++;
-				break;
-			}
-			case RenderObjectType.SHAPE: {
-				const inst: GraphicsInstruction = {
-					renderPipeId: 'graphics',
-					renderable: obj,
-					graphics: (obj as Shape).graphics,
-					offsetX: 0,
-					offsetY: 0,
-				};
-				this._graphicsPipe.execute(inst, buffer);
-				drawCalls++;
-				break;
-			}
-			case RenderObjectType.TEXT: {
-				const inst: TextInstruction = {
-					renderPipeId: 'text',
-					renderable: obj as TextField,
-					offsetX: 0,
-					offsetY: 0,
-				};
-				this._textPipe.execute(inst, buffer);
-				drawCalls++;
-				break;
-			}
-			case RenderObjectType.SPRITE: {
-				const sprite = obj as Sprite;
-				if (sprite.graphics && sprite.graphics.commands.length > 0) {
-					const inst: GraphicsInstruction = {
-						renderPipeId: 'graphics',
-						renderable: obj,
-						graphics: sprite.graphics,
-						offsetX: 0,
-						offsetY: 0,
-					};
-					this._graphicsPipe.execute(inst, buffer);
-					drawCalls++;
-				}
-				break;
-			}
-			case RenderObjectType.PARTICLE: {
-				const inst: ParticleInstruction = {
-					renderPipeId: 'particle',
-					renderable: obj,
-					offsetX: 0,
-					offsetY: 0,
-				};
-				this._particlePipe.execute(inst, buffer);
-				drawCalls++;
-				break;
-			}
+		const instruction = this._createLeafInstruction(obj, 0, 0);
+		if (instruction) {
+			this._executeLeafInstruction(instruction, buffer);
+			drawCalls++;
 		}
 
 		if (offsetX !== 0 || offsetY !== 0) {

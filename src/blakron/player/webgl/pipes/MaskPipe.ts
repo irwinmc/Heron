@@ -8,6 +8,8 @@ import { WebGLRenderBuffer as WGLBuf } from '../WebGLRenderBuffer.js';
 
 const INSTRUCTION_POOL_LIMIT = 256;
 
+type DrawMaskObject = (obj: DisplayObject, buffer: WebGLRenderBuffer, offsetX: number, offsetY: number) => void;
+
 // ── Instructions ──────────────────────────────────────────────────────────────
 
 export interface MaskPushInstruction extends Instruction {
@@ -38,6 +40,15 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 	public static readonly POP_ID = 'maskPop';
 	private static readonly _pushPool: MaskPushInstruction[] = [];
 	private static readonly _popPool: MaskPopInstruction[] = [];
+
+	// Renderer-owned traversal callback used to draw mask display objects on demand.
+	private readonly _drawMaskObject: DrawMaskObject;
+
+	// ── Constructor ───────────────────────────────────────────────────────────
+
+	public constructor(drawMaskObject: DrawMaskObject) {
+		this._drawMaskObject = drawMaskObject;
+	}
 
 	// ── RenderPipe impl ───────────────────────────────────────────────────────
 
@@ -142,7 +153,6 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 	public executeClipPush(
 		inst: MaskPushInstruction,
 		buffer: WebGLRenderBuffer,
-		renderer: { _drawDisplayObject(obj: DisplayObject, buf: WebGLRenderBuffer, ox: number, oy: number): number },
 	): WebGLRenderBuffer | undefined {
 		const { renderable } = inst;
 		const scrollRect = renderable.$scrollRect ?? renderable.$maskRect;
@@ -179,7 +189,6 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 		inst: MaskPopInstruction,
 		buffer: WebGLRenderBuffer,
 		displayBuffer: WebGLRenderBuffer | undefined,
-		renderer: { _drawDisplayObject(obj: DisplayObject, buf: WebGLRenderBuffer, ox: number, oy: number): number },
 	): void {
 		const { renderable, push } = inst;
 		const { offsetX, offsetY } = push;
@@ -222,7 +231,7 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 			);
 			Matrix.release(maskMatrix);
 			// Render the mask shape directly — it is not in the InstructionSet.
-			renderer._drawDisplayObject(mask, maskBuffer, 0, 0);
+			this._drawMaskObject(mask, maskBuffer, 0, 0);
 			maskBuffer.context.popBuffer();
 			// Finish producing the mask texture before sampling it from the
 			// destination-in pass. This also isolates the framebuffer switch from
