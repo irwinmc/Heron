@@ -988,7 +988,9 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		let p = this.$parent;
 		while (p) {
 			alpha *= p.$alpha;
-			if (p.$tintRGB !== 0xffffff) {
+			// Rendering applies the closest non-default tint: an object's own tint
+			// overrides its parent, otherwise it inherits the nearest tinted ancestor.
+			if (tint === 0xffffff && p.$tintRGB !== 0xffffff) {
 				tint = p.$tintRGB;
 			}
 			p = p.$parent;

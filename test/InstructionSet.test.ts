@@ -46,16 +46,18 @@ describe('InstructionSet', () => {
 		expect(set.renderableIndex.get(b)).toBe(2);
 	});
 
-	it('reset clears size but not array length', () => {
+	it('reset releases instruction and dirty-renderable references', () => {
 		const set = new InstructionSet();
+		const dirty = mockObj(3);
 		set.add(mockInstruction('a', mockObj()));
 		set.add(mockInstruction('b', mockObj(2)));
-		const arrLen = set.instructions.length;
+		set.markRenderableDirty(dirty);
 		set.reset();
 		expect(set.instructionSize).toBe(0);
 		expect(set.dirtyRenderableCount).toBe(0);
 		expect(set.renderableIndex.size).toBe(0);
-		expect(set.instructions.length).toBe(arrLen); // not shrunk
+		expect(set.instructions).toHaveLength(0);
+		expect(set.dirtyRenderables).toHaveLength(0);
 	});
 
 	it('markRenderableDirty tracks dirty objects', () => {
@@ -64,6 +66,20 @@ describe('InstructionSet', () => {
 		set.markRenderableDirty(obj);
 		expect(set.dirtyRenderableCount).toBe(1);
 		expect(set.dirtyRenderables[0]).toBe(obj);
+	});
+
+	it('deduplicates a renderable dirtied repeatedly in the same frame', () => {
+		const set = new InstructionSet();
+		const obj = mockObj();
+		set.markRenderableDirty(obj);
+		set.markRenderableDirty(obj);
+		set.markRenderableDirty(obj);
+		expect(set.dirtyRenderableCount).toBe(1);
+		expect(set.dirtyRenderables).toEqual([obj]);
+
+		set.clearDirtyRenderables();
+		set.markRenderableDirty(obj);
+		expect(set.dirtyRenderableCount).toBe(1);
 	});
 
 	it('reuse slots after reset', () => {

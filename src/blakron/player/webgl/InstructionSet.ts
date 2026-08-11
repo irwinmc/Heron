@@ -21,8 +21,8 @@ export interface Instruction {
  * An ordered list of render instructions for one frame.
  *
  * Key design points (from Pixi.js 8):
- * - `instructions` array never shrinks — reuse slots across frames.
- * - `instructionSize` is the true length; slots beyond it are stale.
+ * - `instructions` is reused while a set is stable and cleared on rebuild so
+ *   removed display objects are not retained by stale instruction slots.
  * - `structureDirty` signals that the scene graph changed and the set must
  *   be fully rebuilt before the next render.
  * - `dirtyRenderables` holds objects whose GPU data changed but whose
@@ -37,13 +37,15 @@ export class InstructionSet {
 	public readonly dirtyRenderables: DisplayObject[] = [];
 	public dirtyRenderableCount = 0;
 	public readonly renderableIndex: Map<DisplayObject, number> = new Map<DisplayObject, number>();
+	private readonly _dirtyRenderableSet = new Set<DisplayObject>();
 
 	// ── Public methods ────────────────────────────────────────────────────────
 
-	/** Reset the instruction list (does not shrink the backing array). */
+	/** Reset all per-build and per-frame state, releasing stale object references. */
 	public reset(): void {
+		this.instructions.length = 0;
 		this.instructionSize = 0;
-		this.dirtyRenderableCount = 0;
+		this.clearDirtyRenderables();
 		this.renderableIndex.clear();
 	}
 
@@ -63,6 +65,15 @@ export class InstructionSet {
 
 	/** Mark a renderable as needing a data update this frame. */
 	public markRenderableDirty(obj: DisplayObject): void {
+		if (this._dirtyRenderableSet.has(obj)) return;
+		this._dirtyRenderableSet.add(obj);
 		this.dirtyRenderables[this.dirtyRenderableCount++] = obj;
+	}
+
+	/** Clear consumed dirty objects and release their references. */
+	public clearDirtyRenderables(): void {
+		this.dirtyRenderables.length = 0;
+		this.dirtyRenderableCount = 0;
+		this._dirtyRenderableSet.clear();
 	}
 }

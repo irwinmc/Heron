@@ -6,6 +6,8 @@ import type { InstructionSet } from '../InstructionSet.js';
 import type { RenderPipe } from '../../RenderPipe.js';
 import { WebGLRenderBuffer as WGLBuf } from '../WebGLRenderBuffer.js';
 
+const INSTRUCTION_POOL_LIMIT = 256;
+
 // ── Instructions ──────────────────────────────────────────────────────────────
 
 export interface MaskPushInstruction extends Instruction {
@@ -70,11 +72,14 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 	}
 
 	public static releasePush(inst: MaskPushInstruction): void {
-		MaskPipe._pushPool.push(inst);
+		inst.renderable = undefined as never;
+		if (MaskPipe._pushPool.length < INSTRUCTION_POOL_LIMIT) MaskPipe._pushPool.push(inst);
 	}
 
 	public static releasePop(inst: MaskPopInstruction): void {
-		MaskPipe._popPool.push(inst);
+		inst.renderable = undefined as never;
+		inst.push = undefined as never;
+		if (MaskPipe._popPool.length < INSTRUCTION_POOL_LIMIT) MaskPipe._popPool.push(inst);
 	}
 
 	// ── Execute ───────────────────────────────────────────────────────────────

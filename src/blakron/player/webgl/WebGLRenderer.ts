@@ -183,6 +183,7 @@ export class WebGLRenderer {
 		} else {
 			// ── Partial update: patch GPU data for dirty renderables ──────────
 			this._updateDirtyRenderables(set);
+			this._prepareRenderGroups(set, buffer);
 		}
 
 		// ── Phase B: execute ──────────────────────────────────────────────────
@@ -497,7 +498,7 @@ export class WebGLRenderer {
 		}
 
 		const transform = this._snapshotTransform(buffer, offsetX, offsetY);
-		parentSet.add({
+		parentSet.addLeaf({
 			renderPipeId: 'renderGroup',
 			renderable: obj,
 			set: groupSet,
@@ -578,6 +579,7 @@ export class WebGLRenderer {
 		for (let i = 0; i < set.dirtyRenderableCount; i++) {
 			const obj = set.dirtyRenderables[i];
 			const idx = set.renderableIndex.get(obj);
+			let inst: LeafInstruction | RenderGroupInstruction | undefined;
 			if (idx === undefined) {
 				if (obj.$children && obj.$children.length > 0) {
 					this._refreshDescendantTransforms(obj, set);
@@ -586,11 +588,52 @@ export class WebGLRenderer {
 				}
 				continue;
 			}
-			const inst = set.instructions[idx] as LeafInstruction;
+			inst = set.instructions[idx] as LeafInstruction | RenderGroupInstruction;
 			if (!inst) continue;
-			this._refreshLeafTransform(obj, inst);
+			this._refreshInstructionTransform(obj, inst);
+			// A Sprite can render its own Graphics and also contain children. Its
+			// own indexed leaf must not prevent descendant snapshots from updating.
+			// A renderGroup instruction is the boundary in the parent set; its
+			// descendants belong to the group's independent set instead.
+			if (inst.renderPipeId !== 'renderGroup' && obj.$children && obj.$children.length > 0) {
+				this._refreshDescendantTransforms(obj, set);
+			}
 		}
-		set.dirtyRenderableCount = 0;
+		set.clearDirtyRenderables();
+	}
+
+	/**
+	 * Process dirty or structurally changed nested RenderGroup sets even when
+	 * the root InstructionSet remains stable.
+	 */
+	private _prepareRenderGroups(set: InstructionSet, buffer: WebGLRenderBuffer): void {
+		for (let i = 0; i < set.instructionSize; i++) {
+			const inst = set.instructions[i];
+			if (inst.renderPipeId !== 'renderGroup') continue;
+			const group = inst as RenderGroupInstruction;
+			const groupSet = group.set;
+			if (groupSet.structureDirty) {
+				const savedMatrix = Matrix.create();
+				savedMatrix.copyFrom(buffer.globalMatrix);
+				const savedAlpha = buffer.globalAlpha;
+				const savedTint = buffer.globalTintColor;
+				try {
+					this._applyTransform(buffer, group.transform);
+					this._releaseInstructions(groupSet);
+					groupSet.reset();
+					this._buildInstructions(group.renderable, groupSet, buffer, 0, 0);
+					groupSet.structureDirty = false;
+				} finally {
+					buffer.globalMatrix.copyFrom(savedMatrix);
+					buffer.globalAlpha = savedAlpha;
+					buffer.globalTintColor = savedTint;
+					Matrix.release(savedMatrix);
+				}
+			} else {
+				this._updateDirtyRenderables(groupSet);
+			}
+			this._prepareRenderGroups(groupSet, buffer);
+		}
 	}
 
 	/**
@@ -609,11 +652,17 @@ export class WebGLRenderer {
 		const children = obj.$children;
 		if (!children) return;
 		for (const child of children) {
-			if (child instanceof DisplayObjectContainer && child.isRenderGroup) continue;
+			child.$worldAlpha = obj.$worldAlpha * child.$alpha;
+			child.$worldTint = child.$tintRGB !== 0xffffff ? child.$tintRGB : obj.$worldTint;
 			const idx = set.renderableIndex.get(child);
 			if (idx !== undefined) {
-				const inst = set.instructions[idx] as LeafInstruction;
-				if (inst) this._refreshLeafTransform(child, inst);
+				const inst = set.instructions[idx] as LeafInstruction | RenderGroupInstruction;
+				if (inst) this._refreshInstructionTransform(child, inst);
+			}
+			if (child instanceof DisplayObjectContainer && child.isRenderGroup) {
+				const groupSet = this._renderGroupSets.get(child);
+				if (groupSet && !groupSet.structureDirty) groupSet.markRenderableDirty(child);
+				continue;
 			}
 			if (child.$children && child.$children.length > 0) {
 				this._refreshDescendantTransforms(child, set);
@@ -625,7 +674,10 @@ export class WebGLRenderer {
 	 * Recompute the transform snapshot for a leaf instruction from the object's
 	 * current concatenated matrix and cached world alpha/tint.
 	 */
-	private _refreshLeafTransform(obj: DisplayObject, inst: LeafInstruction): void {
+	private _refreshInstructionTransform(
+		obj: DisplayObject,
+		inst: LeafInstruction | RenderGroupInstruction,
+	): void {
 		const cm = obj.$getConcatenatedMatrix();
 		const t = inst.transform;
 		t.a = cm.a;
@@ -1075,6 +1127,13 @@ export class WebGLRenderer {
 	 * Routes to the RenderGroup's set if the object lives inside one.
 	 */
 	public markRenderableDirty(obj: DisplayObject): void {
+		if (obj instanceof DisplayObjectContainer && obj.isRenderGroup) {
+			const groupSet = this._renderGroupSets.get(obj);
+			if (groupSet && !groupSet.structureDirty) groupSet.markRenderableDirty(obj);
+			this._findOwningSet(obj.$parent).markRenderableDirty(obj);
+			return;
+		}
+
 		// Walk up to find the nearest RenderGroup ancestor (if any).
 		let p = obj.$parent;
 		while (p) {
@@ -1089,5 +1148,17 @@ export class WebGLRenderer {
 		}
 		// No RenderGroup ancestor — route to the root set.
 		if (!this._instructionSet.structureDirty) this._instructionSet.markRenderableDirty(obj);
+	}
+
+	private _findOwningSet(parent: DisplayObjectContainer | undefined): InstructionSet {
+		let current = parent;
+		while (current) {
+			if (current.isRenderGroup) {
+				const groupSet = this._renderGroupSets.get(current);
+				if (groupSet) return groupSet;
+			}
+			current = current.$parent;
+		}
+		return this._instructionSet;
 	}
 }

@@ -39,6 +39,8 @@ const BLEND_MODES: Record<number, string> = {
 	2: 'destination-out',
 };
 
+const INSTRUCTION_POOL_LIMIT = 256;
+
 /**
  * Handles filter rendering for WebGL.
  *
@@ -96,11 +98,15 @@ export class FilterPipe implements RenderPipe<DisplayObject> {
 	}
 
 	public static releasePush(inst: FilterPushInstruction): void {
-		FilterPipe._pushPool.push(inst);
+		inst.renderable = undefined as never;
+		inst.filters = [];
+		if (FilterPipe._pushPool.length < INSTRUCTION_POOL_LIMIT) FilterPipe._pushPool.push(inst);
 	}
 
 	public static releasePop(inst: FilterPopInstruction): void {
-		FilterPipe._popPool.push(inst);
+		inst.renderable = undefined as never;
+		inst.push = undefined as never;
+		if (FilterPipe._popPool.length < INSTRUCTION_POOL_LIMIT) FilterPipe._popPool.push(inst);
 	}
 
 	// ── Execute ───────────────────────────────────────────────────────────────
