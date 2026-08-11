@@ -9,24 +9,17 @@ export class WebGLRenderBuffer {
 	// ── Static fields ─────────────────────────────────────────────────────────
 
 	public static create(context: WebGLRenderContext, width: number, height: number): WebGLRenderBuffer {
-		const buf = _pool.pop();
+		let buf: WebGLRenderBuffer | undefined;
+		for (let i = _pool.length - 1; i >= 0; i--) {
+			if (_pool[i].context === context) {
+				buf = _pool[i];
+				_pool.splice(i, 1);
+				break;
+			}
+		}
 		if (buf) {
 			buf.resize(width, height);
-			const m = buf.globalMatrix;
-			m.a = 1;
-			m.b = 0;
-			m.c = 0;
-			m.d = 1;
-			m.tx = 0;
-			m.ty = 0;
-			buf.globalAlpha = 1;
-			buf.offsetX = 0;
-			buf.offsetY = 0;
-			buf.offscreenOriginX = 0;
-			buf.offscreenOriginY = 0;
-			buf.hasOffscreenTransform = false;
-			buf.filterPadX = 0;
-			buf.filterPadY = 0;
+			buf._resetState();
 			return buf;
 		}
 		return new WebGLRenderBuffer(context, width, height, false);
@@ -39,7 +32,8 @@ export class WebGLRenderBuffer {
 		if (_pool.length < 6) {
 			_pool.push(buf);
 		} else {
-			buf.rootRenderTarget.resize(0, 0);
+			buf.context.flush();
+			buf.rootRenderTarget.dispose();
 		}
 	}
 
@@ -203,6 +197,33 @@ export class WebGLRenderBuffer {
 			this.globalMatrix.append(1, 0, 0, 1, this.offsetX, this.offsetY);
 			this.offsetX = this.offsetY = 0;
 		}
+	}
+
+	private _resetState(): void {
+		this.globalAlpha = 1;
+		this.globalTintColor = 0xffffff;
+		this.globalMatrix.identity();
+		this.savedGlobalMatrix.identity();
+		this.offsetX = 0;
+		this.offsetY = 0;
+		this.currentTexture = undefined;
+		this.drawCalls = 0;
+
+		this.offscreenOriginX = 0;
+		this.offscreenOriginY = 0;
+		this.hasOffscreenTransform = false;
+		this.offscreenInverseTransform.identity();
+		this.offscreenLocalX = 0;
+		this.offscreenLocalY = 0;
+		this.filterPadX = 0;
+		this.filterPadY = 0;
+
+		this.stencilList.length = 0;
+		this.stencilHandleCount = 0;
+		this.scissorState = false;
+		this.hasScissor = false;
+		this._stencilState = false;
+		this._scissorRect.setEmpty();
 	}
 
 	public saveTransform(): void {

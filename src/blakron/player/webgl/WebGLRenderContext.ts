@@ -15,6 +15,15 @@ import type { GL } from './WebGLUtils.js';
 import type { WebGLRenderBuffer } from './WebGLRenderBuffer.js';
 import { MultiTextureBatcher, makeMultiCmd, type MultiTextureDrawCmd } from './MultiTextureBatcher.js';
 
+interface BlurFramebufferEntry {
+	texture: WebGLTexture;
+	fbo: WebGLFramebuffer;
+	byteSize: number;
+}
+
+const BLUR_FRAMEBUFFER_POOL_LIMIT = 16;
+const BLUR_FRAMEBUFFER_POOL_BYTE_LIMIT = 64 * 1024 * 1024;
+
 export class WebGLRenderContext {
 	// ── Public readonly fields ────────────────────────────────────────────────
 
@@ -57,7 +66,11 @@ export class WebGLRenderContext {
 
 	// ── Blur FBO pool ─────────────────────────────────────────────────────────
 	// Key: "${width}x${height}", Value: stack of reusable { texture, fbo } pairs.
-	private readonly _blurFboPool = new Map<string, Array<{ texture: WebGLTexture; fbo: WebGLFramebuffer }>>();
+	private readonly _blurFboPool: Map<string, BlurFramebufferEntry[]> = new Map();
+	// Total number of framebuffer pairs currently retained across all sizes.
+	private _blurFboPoolSize: number = 0;
+	// Approximate RGBA texture memory retained by the blur pool.
+	private _blurFboPoolBytes: number = 0;
 
 	// Public so Player can construct it. The engine is single-Player by
 	// design; there is intentionally no getInstance() singleton.
@@ -589,13 +602,7 @@ export class WebGLRenderContext {
 
 		// ── Acquire a temporary FBO from the pool (or create a new one) ───────
 		const poolKey = `${w}x${h}`;
-		let pool = this._blurFboPool.get(poolKey);
-		if (!pool) {
-			pool = [];
-			this._blurFboPool.set(poolKey, pool);
-		}
-
-		let tmpEntry = pool.pop();
+		let tmpEntry = this._takeBlurFramebuffer(poolKey);
 		if (!tmpEntry) {
 			const tmpTex = gl.createTexture()!;
 			gl.bindTexture(gl.TEXTURE_2D, tmpTex);
@@ -609,7 +616,7 @@ export class WebGLRenderContext {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, tmpFbo);
 			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tmpTex, 0);
 
-			tmpEntry = { texture: tmpTex, fbo: tmpFbo };
+			tmpEntry = { texture: tmpTex, fbo: tmpFbo, byteSize: w * h * 4 };
 		}
 
 		// Clear the temporary FBO before use.
@@ -646,7 +653,61 @@ export class WebGLRenderContext {
 		});
 
 		// ── Return the temporary FBO to the pool ──────────────────────────────
-		pool.push(tmpEntry);
+		this._returnBlurFramebuffer(poolKey, tmpEntry);
+	}
+
+	private _takeBlurFramebuffer(key: string): BlurFramebufferEntry | undefined {
+		const entries = this._blurFboPool.get(key);
+		if (!entries) return undefined;
+
+		const entry = entries.pop();
+		if (!entry) return undefined;
+
+		this._blurFboPoolSize--;
+		this._blurFboPoolBytes -= entry.byteSize;
+		if (entries.length === 0) {
+			this._blurFboPool.delete(key);
+		}
+		return entry;
+	}
+
+	private _returnBlurFramebuffer(key: string, entry: BlurFramebufferEntry): void {
+		if (entry.byteSize > BLUR_FRAMEBUFFER_POOL_BYTE_LIMIT) {
+			this.gl.deleteTexture(entry.texture);
+			this.gl.deleteFramebuffer(entry.fbo);
+			return;
+		}
+
+		while (
+			this._blurFboPoolSize >= BLUR_FRAMEBUFFER_POOL_LIMIT ||
+			this._blurFboPoolBytes + entry.byteSize > BLUR_FRAMEBUFFER_POOL_BYTE_LIMIT
+		) {
+			const oldest = this._blurFboPool.entries().next().value as
+				| [string, BlurFramebufferEntry[]]
+				| undefined;
+			if (!oldest) break;
+
+			const [oldestKey, entries] = oldest;
+			const evicted = entries.pop();
+			if (evicted) {
+				this.gl.deleteTexture(evicted.texture);
+				this.gl.deleteFramebuffer(evicted.fbo);
+				this._blurFboPoolSize--;
+				this._blurFboPoolBytes -= evicted.byteSize;
+			}
+			if (entries.length === 0) {
+				this._blurFboPool.delete(oldestKey);
+			}
+		}
+
+		let entries = this._blurFboPool.get(key);
+		if (!entries) {
+			entries = [];
+			this._blurFboPool.set(key, entries);
+		}
+		entries.push(entry);
+		this._blurFboPoolSize++;
+		this._blurFboPoolBytes += entry.byteSize;
 	}
 
 	/**
@@ -779,6 +840,8 @@ export class WebGLRenderContext {
 
 		// All blur FBO pool entries are invalid after context loss — discard them.
 		this._blurFboPool.clear();
+		this._blurFboPoolSize = 0;
+		this._blurFboPoolBytes = 0;
 
 		// Invalidate all cached WebGL textures on BitmapData instances.
 		// After context loss every WebGLTexture handle is invalid; clearing the

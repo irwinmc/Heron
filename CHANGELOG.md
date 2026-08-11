@@ -4,6 +4,24 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.11] — 2026-08-12
+
+This release hardens pooled WebGL resource lifecycles after the 1.0.10 rendering-pipeline work. It prevents stale offscreen state from leaking between effects and keeps dynamically sized blur resources within a fixed GPU-memory bound.
+
+### Fixed
+
+- **Complete `WebGLRenderBuffer` reuse reset** — pooled offscreen buffers now reset transform snapshots, tint, texture bindings, draw counts, offscreen coordinates, stencil data, and scissor state before reuse. Buffers are only reused by the WebGL context that created them.
+- **RenderBuffer overflow disposal** — when the shared pool is full, pending commands are flushed before discarded buffers dispose their framebuffer and texture, instead of resizing them to a retained 1×1 allocation.
+- **Bounded blur framebuffer pool** — temporary blur texture/framebuffer pairs are capped at 16 entries and approximately 64 MiB of RGBA texture memory across all dimensions. The oldest retained pair is explicitly deleted when either cap is reached, preventing unbounded GPU-memory growth when filtered content changes size.
+- **Context-restore bookkeeping** — restoring a WebGL context now resets both blur pool entries and their retained-entry count.
+
+### Tests
+
+- `test/WebGLRenderBuffer.test.ts` — new: full transient-state reset, context ownership, and pool-overflow disposal.
+- `test/WebGLBlurFramebufferPool.test.ts` — new: count and memory bounds, GPU-resource eviction, byte accounting, and empty-bucket cleanup.
+
+---
+
 ## [1.0.10] — 2026-08-12
 
 This release closes the largest architectural gap left over from the Egret port: mask and filter offscreen rendering no longer bypasses the instruction pipeline. The dedicated `_directDraw` tree-walk that mirrored the main `_buildLeaf` switch has been removed, leaving a single shared leaf-dispatch path for both the main pass and offscreen effect buffers. Bundled with it are correctness fixes for offscreen transforms on rotated/scaled targets, multi-instruction renderables, tint inheritance, and several renderer leaks.
