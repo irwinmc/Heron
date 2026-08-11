@@ -37,6 +37,14 @@ interface TransformState {
 	tint: number;
 }
 
+interface InstructionBuildOptions {
+	readonly isStage?: boolean;
+	readonly inlineRenderGroups?: boolean;
+}
+
+const STAGE_BUILD_OPTIONS: InstructionBuildOptions = { isStage: true };
+const MASK_BUILD_OPTIONS: InstructionBuildOptions = { inlineRenderGroups: true };
+
 // ── Augmented instruction types ───────────────────────────────────────────────
 
 type BaseLeafInstruction =
@@ -111,6 +119,10 @@ export class WebGLRenderer {
 
 	// ── Instruction set ───────────────────────────────────────────────────────
 	private readonly _instructionSet = new InstructionSet();
+	// Scratch instruction sets used by nested mask-object renders.
+	private readonly _maskInstructionSets: InstructionSet[] = [];
+	// Current mask-object rendering depth.
+	private _maskInstructionDepth = 0;
 
 	private readonly _renderGroupSets = new WeakMap<DisplayObjectContainer, InstructionSet>();
 	private readonly _renderGroupSetList: Array<WeakRef<DisplayObjectContainer>> = [];
@@ -131,7 +143,7 @@ export class WebGLRenderer {
 		this._meshPipe = new MeshPipe();
 		this._textPipe = new TextPipe(this._canvasRenderer);
 		this._maskPipe = new MaskPipe((obj, buffer, offsetX, offsetY) => {
-			this._directDraw(obj, buffer, offsetX, offsetY);
+			this._renderMaskObject(obj, buffer, offsetX, offsetY);
 		});
 	}
 
@@ -182,7 +194,7 @@ export class WebGLRenderer {
 			set.reset();
 			buffer.globalAlpha = 1;
 			buffer.globalTintColor = 0xffffff;
-			this._buildInstructions(displayObject, set, buffer, matrix.tx, matrix.ty, true);
+			this._buildInstructions(displayObject, set, buffer, matrix.tx, matrix.ty, STAGE_BUILD_OPTIONS);
 			set.structureDirty = false;
 		} else {
 			// ── Partial update: patch GPU data for dirty renderables ──────────
@@ -248,14 +260,19 @@ export class WebGLRenderer {
 		buffer: WebGLRenderBuffer,
 		offsetX: number,
 		offsetY: number,
-		isStage = false,
+		options?: InstructionBuildOptions,
 	): void {
 		const $displayList = displayObject.$displayList;
-		if ($displayList && !isStage) {
+		if ($displayList && !options?.isStage) {
 			const inst = this._makeCacheInstruction(displayObject, offsetX, offsetY, buffer);
 			if (inst) set.addLeaf(inst);
 			return;
 		}
+		const childOptions = options?.isStage
+			? options.inlineRenderGroups
+				? MASK_BUILD_OPTIONS
+				: undefined
+			: options;
 
 		// Emit self instruction (Bitmap / Shape / Sprite / Mesh).
 		this._buildLeaf(displayObject, set, buffer, offsetX, offsetY);
@@ -291,21 +308,21 @@ export class WebGLRenderer {
 			if (child.$tintRGB !== 0xffffff) buffer.globalTintColor = child.$tintRGB;
 
 			// Emit effect wrappers then recurse.
-			if (child instanceof DisplayObjectContainer && child.isRenderGroup) {
+			if (!childOptions?.inlineRenderGroups && child instanceof DisplayObjectContainer && child.isRenderGroup) {
 				this._buildRenderGroup(child, set, buffer, ox, oy);
 			} else {
 				switch (child.$renderMode) {
 					case RenderMode.FILTER:
-						this._buildFilter(child, set, buffer, ox, oy);
+						this._buildFilter(child, set, buffer, ox, oy, childOptions);
 						break;
 					case RenderMode.CLIP:
-						this._buildClip(child, set, buffer, ox, oy);
+						this._buildClip(child, set, buffer, ox, oy, childOptions);
 						break;
 					case RenderMode.SCROLLRECT:
-						this._buildScrollRect(child, set, buffer, ox, oy);
+						this._buildScrollRect(child, set, buffer, ox, oy, childOptions);
 						break;
 					default:
-						this._buildInstructions(child, set, buffer, ox, oy);
+						this._buildInstructions(child, set, buffer, ox, oy, childOptions);
 				}
 			}
 			buffer.globalAlpha = prevAlpha;
@@ -410,10 +427,11 @@ export class WebGLRenderer {
 		buffer: WebGLRenderBuffer,
 		offsetX: number,
 		offsetY: number,
+		options?: InstructionBuildOptions,
 	): void {
 		const filters = obj.$filters;
 		if (!filters.length) {
-			this._buildInstructions(obj, set, buffer, offsetX, offsetY);
+			this._buildInstructions(obj, set, buffer, offsetX, offsetY, options);
 			return;
 		}
 		const transform = this._snapshotTransform(buffer, offsetX, offsetY);
@@ -421,7 +439,7 @@ export class WebGLRenderer {
 			transform,
 		}) as EffectPushInstruction;
 		set.addIndexed(push);
-		this._buildInstructions(obj, set, buffer, offsetX, offsetY);
+		this._buildInstructions(obj, set, buffer, offsetX, offsetY, options);
 		set.add(FilterPipe.makePop(obj, push as FilterPushInstruction));
 	}
 
@@ -434,11 +452,12 @@ export class WebGLRenderer {
 		buffer: WebGLRenderBuffer,
 		offsetX: number,
 		offsetY: number,
+		options?: InstructionBuildOptions,
 	): void {
 		const transform = this._snapshotTransform(buffer, offsetX, offsetY);
 		const push = Object.assign(MaskPipe.makePush(obj, offsetX, offsetY), { transform }) as EffectPushInstruction;
 		set.addIndexed(push);
-		this._buildInstructions(obj, set, buffer, offsetX, offsetY);
+		this._buildInstructions(obj, set, buffer, offsetX, offsetY, options);
 		set.add(MaskPipe.makePop(obj, push as MaskPushInstruction));
 	}
 
@@ -453,6 +472,7 @@ export class WebGLRenderer {
 		buffer: WebGLRenderBuffer,
 		offsetX: number,
 		offsetY: number,
+		options?: InstructionBuildOptions,
 	): void {
 		const rect = obj.$scrollRect ?? obj.$maskRect;
 		if (!rect || rect.isEmpty()) return;
@@ -469,7 +489,7 @@ export class WebGLRenderer {
 		// Tag as scrollRect so execute knows which path to take.
 		(push as MaskPushInstruction).isScrollRect = true;
 		set.addIndexed(push);
-		this._buildInstructions(obj, set, buffer, ox, oy);
+		this._buildInstructions(obj, set, buffer, ox, oy, options);
 		set.add(MaskPipe.makePop(obj, push as MaskPushInstruction));
 	}
 
@@ -993,70 +1013,36 @@ export class WebGLRenderer {
 	}
 
 	/**
-	 * Draw `obj` and its subtree directly into `buffer`, bypassing the
-	 * InstructionSet. Used for mask objects, which are rendered on demand
-	 * during mask compositing rather than added to the main instruction set.
-	 * Returns the number of draw calls issued.
+	 * Build and execute a mask object through the regular instruction pipeline.
+	 * Scratch sets are separated by nesting depth because a mask subtree may
+	 * contain another mask and re-enter this method during execution.
 	 */
-	private _directDraw(obj: DisplayObject, buffer: WebGLRenderBuffer, offsetX: number, offsetY: number): number {
-		let drawCalls = 0;
-
-		// Bake offset into globalMatrix instead of buffer.offsetX
-		// so that GraphicsPipe / BitmapPipe / MeshPipe see it in the matrix.
-		if (offsetX !== 0 || offsetY !== 0) {
-			buffer.globalMatrix.append(1, 0, 0, 1, offsetX, offsetY);
+	private _renderMaskObject(
+		obj: DisplayObject,
+		buffer: WebGLRenderBuffer,
+		offsetX: number,
+		offsetY: number,
+	): void {
+		const depth = this._maskInstructionDepth++;
+		let set = this._maskInstructionSets[depth];
+		if (!set) {
+			set = new InstructionSet();
+			this._maskInstructionSets[depth] = set;
 		}
 
-		const instruction = this._createLeafInstruction(obj, 0, 0);
-		if (instruction) {
-			this._executeLeafInstruction(instruction, buffer);
-			drawCalls++;
+		try {
+			set.reset();
+			buffer.globalAlpha = 1;
+			buffer.globalTintColor = 0xffffff;
+			// RenderGroups are intentionally inlined into this scratch set. Their
+			// persistent sets contain transforms from the main scene coordinate space.
+			this._buildInstructions(obj, set, buffer, offsetX, offsetY, MASK_BUILD_OPTIONS);
+			this._executeInstructions(set, buffer);
+		} finally {
+			this._releaseInstructions(set);
+			set.reset();
+			this._maskInstructionDepth--;
 		}
-
-		if (offsetX !== 0 || offsetY !== 0) {
-			buffer.globalMatrix.append(1, 0, 0, 1, -offsetX, -offsetY);
-		}
-
-		const $children = obj.$children;
-		if (!$children) return drawCalls;
-
-		for (const child of $children) {
-			if (child.$renderMode === RenderMode.NONE) continue;
-
-			let ox: number, oy: number;
-			let savedMatrix: Matrix | undefined;
-
-			if (child.$useTranslate) {
-				const m = child.$getMatrix();
-				ox = offsetX + child.$x;
-				oy = offsetY + child.$y;
-				savedMatrix = Matrix.create();
-				savedMatrix.copyFrom(buffer.globalMatrix);
-				buffer.transform(m.a, m.b, m.c, m.d, ox, oy);
-				ox = -child.$anchorOffsetX;
-				oy = -child.$anchorOffsetY;
-			} else {
-				ox = offsetX + child.$x - child.$anchorOffsetX;
-				oy = offsetY + child.$y - child.$anchorOffsetY;
-			}
-
-			const prevAlpha = buffer.globalAlpha;
-			if (child.$alpha !== 1) buffer.globalAlpha *= child.$alpha;
-			const prevTint = buffer.globalTintColor;
-			if (child.$tintRGB !== 0xffffff) buffer.globalTintColor = child.$tintRGB;
-
-			drawCalls += this._directDraw(child, buffer, ox, oy);
-
-			buffer.globalAlpha = prevAlpha;
-			buffer.globalTintColor = prevTint;
-
-			if (savedMatrix) {
-				buffer.globalMatrix.copyFrom(savedMatrix);
-				Matrix.release(savedMatrix);
-			}
-		}
-
-		return drawCalls;
 	}
 
 	// ── Structure dirty notification ──────────────────────────────────────────

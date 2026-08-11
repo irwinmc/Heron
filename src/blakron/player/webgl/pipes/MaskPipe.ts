@@ -291,6 +291,10 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 		if (scrollRect) buffer.context.popMask();
 		if (hasBlend) buffer.context.setGlobalCompositeOperation(prevBlend);
 
+		// The composite samples displayBuffer's texture. Finish that draw before
+		// returning the buffer to the pool, where a later effect may resize and
+		// overwrite the same framebuffer texture during this frame.
+		buffer.context.flush();
 		WGLBuf.release(displayBuffer);
 	}
 }

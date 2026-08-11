@@ -8,7 +8,7 @@
 		<style>
 			:root {
 				--sidebar-w: 240px;
-				--log-h: 360px;
+				--log-h: 180px;
 			}
 			#pf-graph {
 				border: none;
@@ -355,6 +355,38 @@
 			root.addChild(bezier);
 			info('18: Quadratic bezier');
 
+			// ── Test 19: Complex mask subtree ─────────────────────────────────────
+			// The mask contains a scrollRect child. The old direct traversal ignored
+			// that nested effect and revealed the full 100px-wide content. The shared
+			// instruction pipeline must reveal only the left 45px window.
+			const complexMasked = new Sprite();
+			complexMasked.x = 510;
+			complexMasked.y = 380;
+			const complexContent = new Shape();
+			complexContent.graphics.beginFill(0x00ccff, 1);
+			complexContent.graphics.drawRect(0, 0, 100, 60);
+			complexContent.graphics.endFill();
+			complexContent.graphics.lineStyle(4, 0xffffff, 1);
+			complexContent.graphics.moveTo(10, 10);
+			complexContent.graphics.lineTo(90, 50);
+			complexContent.graphics.moveTo(90, 10);
+			complexContent.graphics.lineTo(10, 50);
+			complexContent.graphics.endFill();
+			complexMasked.addChild(complexContent);
+			const complexMask = new Sprite();
+			const maskViewport = new Sprite();
+			maskViewport.scrollRect = new Rectangle(0, 0, 45, 60);
+			const maskFill = new Shape();
+			maskFill.graphics.beginFill(0xffffff, 1);
+			maskFill.graphics.drawRect(0, 0, 100, 60);
+			maskFill.graphics.endFill();
+			maskViewport.addChild(maskFill);
+			complexMask.addChild(maskViewport);
+			complexMasked.addChild(complexMask);
+			complexMasked.mask = complexMask;
+			root.addChild(complexMasked);
+			info('19: Nested scrollRect mask (45px cyan window)');
+
 			// ── Incremental pipeline regression animation ─────────────────────────
 			// These objects are transformed only after the first InstructionSet build,
 			// exercising partial updates for scrollRect, filter, mask and RenderGroup.
@@ -375,6 +407,8 @@
 				clipped,
 				blurred,
 				masked,
+				complexMasked,
+				maskViewport,
 				renderGroup,
 				get pipelineFrame() {
 					return pipelineFrame;
@@ -382,7 +416,7 @@
 			};
 			info('Incremental animation: scrollRect + filter + mask + RenderGroup');
 
-			info(`--- All 18 tests rendered (${app.player.isWebGL ? 'WebGL' : 'Canvas 2D'}) ---`);
+			info(`--- All 19 tests rendered (${app.player.isWebGL ? 'WebGL' : 'Canvas 2D'}) ---`);
 
 			// ── Perf + FPS ─────────────────────────────────────────────────────
 			const $ = id => document.getElementById(id);
