@@ -46,6 +46,16 @@ describe('InstructionSet', () => {
 		expect(set.renderableIndex.get(b)).toBe(2);
 	});
 
+	it('indexes every transform-bearing instruction for the same renderable', () => {
+		const set = new InstructionSet();
+		const obj = mockObj();
+		set.addIndexed(mockInstruction('filterPush', obj));
+		set.addLeaf(mockInstruction('bitmap', obj));
+		set.add(mockInstruction('filterPop', obj));
+
+		expect(set.renderableIndex.get(obj)).toEqual([0, 1]);
+	});
+
 	it('reset releases instruction and dirty-renderable references', () => {
 		const set = new InstructionSet();
 		const dirty = mockObj(3);

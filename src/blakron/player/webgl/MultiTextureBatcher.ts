@@ -2,7 +2,9 @@ import type { Filter } from '../../filters/Filter.js';
 
 // ── MultiTextureDrawCmd ───────────────────────────────────────────────────────
 
-/** A draw command that references a multi-texture batch. */
+/**
+ * A draw command that references a multi-texture batch.
+ */
 export interface MultiTextureDrawCmd {
 	readonly isMulti: true;
 	count: number;

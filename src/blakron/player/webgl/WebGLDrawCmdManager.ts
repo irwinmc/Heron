@@ -35,7 +35,7 @@ export interface DrawCmd {
 	smoothing: boolean;
 	x: number;
 	y: number;
-	/** Populated only for MULTI_TEXTURE commands. */
+	// Populated only for MULTI_TEXTURE commands.
 	multiCmd: MultiTextureDrawCmd | undefined;
 }
 

@@ -150,6 +150,38 @@ describe('RenderGroup incremental updates', () => {
 		expect(rootSet.structureDirty).toBe(false);
 	});
 
+	it('updates every effect snapshot for an object inside a stable group', () => {
+		const renderer = new WebGLRenderer();
+		const state = internals(renderer);
+		const rootSet = state._instructionSet;
+		rootSet.structureDirty = false;
+		const group = new Sprite();
+		group.isRenderGroup = true;
+		const child = new Sprite();
+		group.addChild(child);
+		const groupSet = new InstructionSet();
+		registerGroup(renderer, rootSet, group, groupSet);
+		const effectTransform = transform();
+		const leafTransform = transform();
+		groupSet.addIndexed({
+			renderPipeId: 'filterPush',
+			renderable: child,
+			filters: [],
+			offsetX: 0,
+			offsetY: 0,
+			savedBlendMode: 'source-over',
+			transform: effectTransform,
+		} as never);
+		groupSet.addLeaf({ renderPipeId: 'graphics', renderable: child, transform: leafTransform } as never);
+
+		child.x = 27;
+		renderer.markRenderableDirty(child);
+		state._prepareRenderGroups(rootSet, undefined as never);
+
+		expect(effectTransform.tx).toBeCloseTo(child.$getConcatenatedMatrix().tx);
+		expect(leafTransform.tx).toBeCloseTo(child.$getConcatenatedMatrix().tx);
+	});
+
 	it('rebuilds only a structurally dirty group set', () => {
 		const renderer = new WebGLRenderer();
 		const state = internals(renderer);

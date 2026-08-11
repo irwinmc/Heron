@@ -414,7 +414,7 @@ export class WebGLRenderer {
 		const push = Object.assign(FilterPipe.makePush(obj, filters, offsetX, offsetY), {
 			transform,
 		}) as EffectPushInstruction;
-		set.add(push);
+		set.addIndexed(push);
 		this._buildInstructions(obj, set, buffer, offsetX, offsetY);
 		set.add(FilterPipe.makePop(obj, push as FilterPushInstruction));
 	}
@@ -431,7 +431,7 @@ export class WebGLRenderer {
 	): void {
 		const transform = this._snapshotTransform(buffer, offsetX, offsetY);
 		const push = Object.assign(MaskPipe.makePush(obj, offsetX, offsetY), { transform }) as EffectPushInstruction;
-		set.add(push);
+		set.addIndexed(push);
 		this._buildInstructions(obj, set, buffer, offsetX, offsetY);
 		set.add(MaskPipe.makePop(obj, push as MaskPushInstruction));
 	}
@@ -462,7 +462,7 @@ export class WebGLRenderer {
 		const push = Object.assign(MaskPipe.makePush(obj, offsetX, offsetY), { transform }) as EffectPushInstruction;
 		// Tag as scrollRect so execute knows which path to take.
 		(push as MaskPushInstruction).isScrollRect = true;
-		set.add(push);
+		set.addIndexed(push);
 		this._buildInstructions(obj, set, buffer, ox, oy);
 		set.add(MaskPipe.makePop(obj, push as MaskPushInstruction));
 	}
@@ -498,7 +498,7 @@ export class WebGLRenderer {
 		}
 
 		const transform = this._snapshotTransform(buffer, offsetX, offsetY);
-		parentSet.addLeaf({
+		parentSet.addIndexed({
 			renderPipeId: 'renderGroup',
 			renderable: obj,
 			set: groupSet,
@@ -578,9 +578,8 @@ export class WebGLRenderer {
 	private _updateDirtyRenderables(set: InstructionSet): void {
 		for (let i = 0; i < set.dirtyRenderableCount; i++) {
 			const obj = set.dirtyRenderables[i];
-			const idx = set.renderableIndex.get(obj);
-			let inst: LeafInstruction | RenderGroupInstruction | undefined;
-			if (idx === undefined) {
+			const indices = set.renderableIndex.get(obj);
+			if (indices === undefined) {
 				if (obj.$children && obj.$children.length > 0) {
 					this._refreshDescendantTransforms(obj, set);
 				} else if (this._hasGraphicsContent(obj)) {
@@ -588,14 +587,20 @@ export class WebGLRenderer {
 				}
 				continue;
 			}
-			inst = set.instructions[idx] as LeafInstruction | RenderGroupInstruction;
-			if (!inst) continue;
-			this._refreshInstructionTransform(obj, inst);
+			let isRenderGroupBoundary = false;
+			const count = typeof indices === 'number' ? 1 : indices.length;
+			for (let index = 0; index < count; index++) {
+				const idx = typeof indices === 'number' ? indices : indices[index];
+				const inst = set.instructions[idx] as LeafInstruction | EffectPushInstruction | RenderGroupInstruction;
+				if (!inst) continue;
+				this._refreshInstructionTransform(obj, inst);
+				if (inst.renderPipeId === 'renderGroup') isRenderGroupBoundary = true;
+			}
 			// A Sprite can render its own Graphics and also contain children. Its
 			// own indexed leaf must not prevent descendant snapshots from updating.
 			// A renderGroup instruction is the boundary in the parent set; its
 			// descendants belong to the group's independent set instead.
-			if (inst.renderPipeId !== 'renderGroup' && obj.$children && obj.$children.length > 0) {
+			if (!isRenderGroupBoundary && obj.$children && obj.$children.length > 0) {
 				this._refreshDescendantTransforms(obj, set);
 			}
 		}
@@ -654,10 +659,14 @@ export class WebGLRenderer {
 		for (const child of children) {
 			child.$worldAlpha = obj.$worldAlpha * child.$alpha;
 			child.$worldTint = child.$tintRGB !== 0xffffff ? child.$tintRGB : obj.$worldTint;
-			const idx = set.renderableIndex.get(child);
-			if (idx !== undefined) {
-				const inst = set.instructions[idx] as LeafInstruction | RenderGroupInstruction;
-				if (inst) this._refreshInstructionTransform(child, inst);
+			const indices = set.renderableIndex.get(child);
+			if (indices !== undefined) {
+				const count = typeof indices === 'number' ? 1 : indices.length;
+				for (let index = 0; index < count; index++) {
+					const idx = typeof indices === 'number' ? indices : indices[index];
+					const inst = set.instructions[idx] as LeafInstruction | EffectPushInstruction | RenderGroupInstruction;
+					if (inst) this._refreshInstructionTransform(child, inst);
+				}
 			}
 			if (child instanceof DisplayObjectContainer && child.isRenderGroup) {
 				const groupSet = this._renderGroupSets.get(child);
@@ -676,7 +685,7 @@ export class WebGLRenderer {
 	 */
 	private _refreshInstructionTransform(
 		obj: DisplayObject,
-		inst: LeafInstruction | RenderGroupInstruction,
+		inst: LeafInstruction | EffectPushInstruction | RenderGroupInstruction,
 	): void {
 		const cm = obj.$getConcatenatedMatrix();
 		const t = inst.transform;
