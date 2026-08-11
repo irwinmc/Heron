@@ -41,4 +41,21 @@ describe('createPlayer lifecycle', () => {
 		expect(removeDocumentListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
 		expect(() => app.start()).toThrow(/destroyed/);
 	});
+
+	it('tries WebGL directly on the supplied canvas without a probe canvas', () => {
+		const canvas = document.createElement('canvas');
+		const getContext = vi.spyOn(canvas, 'getContext');
+		const createElement = vi.spyOn(document, 'createElement');
+
+		const player = new Player(canvas);
+
+		expect(getContext).toHaveBeenNthCalledWith(1, 'webgl2');
+		expect(getContext).toHaveBeenNthCalledWith(2, 'webgl');
+		expect(getContext).toHaveBeenNthCalledWith(3, '2d');
+		// Canvas fallback creates one RenderBuffer; there is no additional
+		// temporary canvas used solely to probe WebGL support.
+		expect(createElement).toHaveBeenCalledOnce();
+		expect(player.isWebGL).toBe(false);
+		player.destroy();
+	});
 });
