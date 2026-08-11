@@ -4,6 +4,38 @@ All notable changes to `@blakron/core` are documented here.
 
 ---
 
+## [1.0.10] — 2026-08-12
+
+This release closes the largest architectural gap left over from the Egret port: mask and filter offscreen rendering no longer bypasses the instruction pipeline. The dedicated `_directDraw` tree-walk that mirrored the main `_buildLeaf` switch has been removed, leaving a single shared leaf-dispatch path for both the main pass and offscreen effect buffers. Bundled with it are correctness fixes for offscreen transforms on rotated/scaled targets, multi-instruction renderables, tint inheritance, and several renderer leaks.
+
+### Changed
+
+- **Unified mask rendering through the instruction pipeline** — mask/clip subtrees now build into a reusable scratch `InstructionSet` instead of being drawn via `_directDraw`. Nested effects, cached (`cacheAsBitmap`/`cacheAsTexture`) content, and RenderGroups are preserved inside mask subtrees, and RenderGroups are inlined in mask-local coordinate space. Mask composites are flushed before their pooled framebuffers are released. This removes the duplicated leaf-rendering switch and the divergence between main-pass and effect-pass rendering flagged in the 1.0.9 architecture review.
+- **Shared WebGL leaf dispatch** — leaf instruction creation and pipe dispatch are now centralised, so the main build pass and mask rendering share the same path through `BitmapPipe` / `MeshPipe` / `GraphicsPipe` / `TextPipe` / `ParticlePipe`.
+- **`InstructionSet`: multiple instructions per renderable** — the per-renderable index map previously stored a single instruction slot, which silently dropped transform refreshes for objects owning more than one transform-bearing instruction (e.g. an effect push together with its leaf). It now tracks an array of indices and refreshes all of them.
+- **Precision dirtying for offscreen effects** — `$markTransformDirty` / `$markRenderDirty` are now separated on the offscreen path so cached content and effect buffers refresh only the state that actually changed.
+
+### Fixed
+
+- **Offscreen effect transforms on rotated/scaled targets** — mask and filter offscreen buffers previously only accounted for translation, so compositing broke when the target object was rotated or scaled. An inverse world transform is now applied to convert world-space instructions into the buffer's local coordinate space, and mask compositing uses a dedicated framebuffer draw method for safe UV flipping.
+- **Tint inheritance respects the closest non-default ancestor** — a child no longer picks up a distant ancestor's tint when an intermediate ancestor resets tint to the default.
+- **RenderGroup rebuild during partial renderer updates** — a RenderGroup is now recalculated when a dirty renderable lands inside it during a partial (non-structural) update pass, instead of being skipped.
+- **Renderer leaks and unbounded pools** — `InstructionSet` arrays are cleared and dirty renderables are deduplicated on rebuild; `FilterPipe` and `MaskPipe` now null out their cached state and cap their instruction pools to prevent unbounded growth across frames.
+
+### Tests
+
+- `test/EffectTransform.test.ts` — new: offscreen transform correctness on rotated/scaled targets, and multi-instruction transform refresh.
+- `test/InstructionSet.test.ts` — expanded: multi-instruction-per-renderable indexing, array clearing, dirty-renderable deduplication.
+- `test/InstructionPool.test.ts` — new: filter/mask pipe pool cap and null-out behaviour.
+- `test/RenderGroup.test.ts` — new: RenderGroup rebuild during partial updates, plus mask-subtree RenderGroup inlining.
+- `test/WebGLRendererDirty.test.ts` — new: dirty-mark propagation and partial-update correctness.
+- `test/WebGLRendererLeaf.test.ts` — new: shared leaf dispatch for main and mask rendering.
+- `test/MaskPipe.test.ts` — expanded: complex (nested effects + cached content) mask visual and lifecycle regression.
+- `test/WebGLVertexArrayObject.test.ts` — new: VAO sizing and cache-array behaviour used by the new framebuffer draw path.
+- `test/DisplayObject.test.ts` — expanded: transform/alpha dirty marking used by the offscreen path.
+
+---
+
 ## [1.0.9] — 2026-08-06
 
 ### Added
