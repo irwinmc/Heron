@@ -96,6 +96,19 @@ describe('DisplayObject', () => {
 		maskObj.$stage = {} as any;
 		obj.mask = maskObj;
 		expect(obj.$renderMode).toBe(RenderMode.CLIP);
+		expect(maskObj.$renderMode).toBe(RenderMode.NONE);
+	});
+
+	it('replacing or clearing a DisplayObject mask restores its render mode', () => {
+		const obj = new DisplayObject();
+		const firstMask = new DisplayObject();
+		const secondMask = new DisplayObject();
+		obj.mask = firstMask;
+		obj.mask = secondMask;
+		expect(firstMask.$renderMode).toBeUndefined();
+		expect(secondMask.$renderMode).toBe(RenderMode.NONE);
+		obj.mask = undefined;
+		expect(secondMask.$renderMode).toBeUndefined();
 	});
 
 	it('mask=undefined clears mask', () => {

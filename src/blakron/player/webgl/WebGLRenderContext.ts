@@ -395,6 +395,7 @@ export class WebGLRenderContext {
 		_bounds?: Rectangle,
 		rotated?: boolean,
 		smoothing?: boolean,
+		flipY = false,
 	): void {
 		if (this.contextLost || !texture || !this._currentBuffer) return;
 		const buf = this._currentBuffer;
@@ -438,6 +439,7 @@ export class WebGLRenderContext {
 				undefined,
 				rotated,
 				slot,
+				flipY,
 			);
 			const cmd = makeMultiCmd(2, this._batcher.slots, this._batcher.textureCount);
 			this.drawCmdManager.pushDrawMultiTexture(cmd);
@@ -463,10 +465,47 @@ export class WebGLRenderContext {
 			meshVertices,
 			meshIndices,
 			rotated,
+			0,
+			flipY,
 		);
 
 		const count = meshIndices ? meshIndices.length / 3 : 2;
 		this.drawCmdManager.pushDrawTexture(texture, count, this.activeFilter, textureWidth, textureHeight);
+	}
+
+	/**
+	 * Draw a framebuffer-backed texture with vertically flipped UVs while
+	 * preserving the destination geometry and its transform origin.
+	 */
+	public drawFramebufferTexture(
+		texture: WebGLTexture,
+		sourceWidth: number,
+		sourceHeight: number,
+		destX: number,
+		destY: number,
+		destWidth: number,
+		destHeight: number,
+	): void {
+		this.drawTexture(
+			texture,
+			0,
+			0,
+			sourceWidth,
+			sourceHeight,
+			destX,
+			destY,
+			destWidth,
+			destHeight,
+			sourceWidth,
+			sourceHeight,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			true,
+		);
 	}
 
 	/**

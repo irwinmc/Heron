@@ -224,27 +224,29 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 			// Render the mask shape directly — it is not in the InstructionSet.
 			renderer._drawDisplayObject(mask, maskBuffer, 0, 0);
 			maskBuffer.context.popBuffer();
+			// Finish producing the mask texture before sampling it from the
+			// destination-in pass. This also isolates the framebuffer switch from
+			// the blend-state commands used by the composite.
+			maskBuffer.context.flush();
 
 			displayBuffer.context.setGlobalCompositeOperation('destination-in');
 			const mw = maskBuffer.rootRenderTarget.width;
 			const mh = maskBuffer.rootRenderTarget.height;
 			if (maskBuffer.rootRenderTarget.texture) {
-				displayBuffer.setTransform(1, 0, 0, -1, 0, maskBuffer.height);
-				displayBuffer.context.drawTexture(
+				displayBuffer.context.drawFramebufferTexture(
 					maskBuffer.rootRenderTarget.texture,
-					0,
-					0,
 					mw,
 					mh,
 					0,
 					0,
-					mw,
-					mh,
 					mw,
 					mh,
 				);
-				displayBuffer.setTransform(1, 0, 0, 1, 0, 0);
 			}
+			// Execute destination-in while displayBuffer is still the active target.
+			// Deferring this past the source-over restoration can render the mask
+			// texture as an ordinary white child instead of clipping the content.
+			displayBuffer.context.flush();
 			displayBuffer.context.setGlobalCompositeOperation('source-over');
 			WGLBuf.release(maskBuffer);
 		}
@@ -263,19 +265,19 @@ export class MaskPipe implements RenderPipe<DisplayObject> {
 			);
 		}
 
-		const savedMatrix = Matrix.create();
-		savedMatrix.copyFrom(buffer.globalMatrix);
-		// offsetX/Y already in globalMatrix via _applyTransform; only add bounds flip.
-		buffer.globalMatrix.append(1, 0, 0, -1, bx, by + displayBuffer.height);
-
 		const dw = displayBuffer.rootRenderTarget.width;
 		const dh = displayBuffer.rootRenderTarget.height;
 		if (displayBuffer.rootRenderTarget.texture) {
-			buffer.context.drawTexture(displayBuffer.rootRenderTarget.texture, 0, 0, dw, dh, 0, 0, dw, dh, dw, dh);
+			buffer.context.drawFramebufferTexture(
+				displayBuffer.rootRenderTarget.texture,
+				dw,
+				dh,
+				bx,
+				by,
+				bw,
+				bh,
+			);
 		}
-
-		buffer.globalMatrix.copyFrom(savedMatrix);
-		Matrix.release(savedMatrix);
 
 		if (scrollRect) buffer.context.popMask();
 		if (hasBlend) buffer.context.setGlobalCompositeOperation(prevBlend);

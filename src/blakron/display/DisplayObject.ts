@@ -942,31 +942,36 @@ export class DisplayObject extends EventDispatcher<DisplayObjectEvents> {
 		if (value === this) {
 			return;
 		}
+		const previousMask = this.$mask;
 		if (value instanceof DisplayObject) {
-			if (value === this.$mask) {
+			if (value === previousMask) {
 				return;
 			}
 			if (value.$maskedObject) {
 				value.$maskedObject.mask = undefined;
 			}
+			if (previousMask) {
+				previousMask.$maskedObject = undefined;
+				previousMask.$updateRenderMode();
+			}
 			value.$maskedObject = this;
+			value.$updateRenderMode();
 			this.$mask = value;
 			this.$maskRect = undefined;
-		} else if (value instanceof Rectangle) {
-			if (!this.$maskRect) {
-				this.$maskRect = new Rectangle();
-			}
-			this.$maskRect.copyFrom(value);
-			if (this.$mask) {
-				this.$mask.$maskedObject = undefined;
-				this.$mask = undefined;
-			}
 		} else {
-			if (this.$mask) {
-				this.$mask.$maskedObject = undefined;
-				this.$mask = undefined;
+			if (previousMask) {
+				previousMask.$maskedObject = undefined;
+				previousMask.$updateRenderMode();
 			}
-			this.$maskRect = undefined;
+			this.$mask = undefined;
+			if (value instanceof Rectangle) {
+				if (!this.$maskRect) {
+					this.$maskRect = new Rectangle();
+				}
+				this.$maskRect.copyFrom(value);
+			} else {
+				this.$maskRect = undefined;
+			}
 		}
 		this.$updateRenderMode();
 		this.$markDirty();

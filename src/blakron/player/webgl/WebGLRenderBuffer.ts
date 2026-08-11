@@ -24,6 +24,7 @@ export class WebGLRenderBuffer {
 			buf.offsetY = 0;
 			buf.offscreenOriginX = 0;
 			buf.offscreenOriginY = 0;
+			buf.hasOffscreenTransform = false;
 			buf.filterPadX = 0;
 			buf.filterPadY = 0;
 			return buf;
@@ -34,6 +35,7 @@ export class WebGLRenderBuffer {
 	public static release(buf: WebGLRenderBuffer): void {
 		buf.filterPadX = 0;
 		buf.filterPadY = 0;
+		buf.hasOffscreenTransform = false;
 		if (_pool.length < 6) {
 			_pool.push(buf);
 		} else {
@@ -60,6 +62,13 @@ export class WebGLRenderBuffer {
 
 	public offscreenOriginX = 0;
 	public offscreenOriginY = 0;
+	// Whether instructions must be converted from world space into this offscreen buffer's local space.
+	public hasOffscreenTransform = false;
+	// Inverse world transform of the object that owns this offscreen buffer.
+	public readonly offscreenInverseTransform: Matrix = new Matrix();
+	// Local translation that places content bounds after any filter padding.
+	public offscreenLocalX = 0;
+	public offscreenLocalY = 0;
 	public filterPadX = 0;
 	public filterPadY = 0;
 

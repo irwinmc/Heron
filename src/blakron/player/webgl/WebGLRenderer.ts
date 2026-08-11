@@ -789,7 +789,7 @@ export class WebGLRenderer {
 					const offscreen = this._filterPipe.executePush(push, activeBuffer);
 					offscreenStack.push(offscreen);
 					if (offscreen) {
-						this._setOffscreenOrigin(offscreen, push.renderable.$getOriginalBounds(), pushT);
+						this._configureOffscreenTransform(offscreen, push.renderable.$getOriginalBounds(), pushT);
 						activeBuffer = offscreen;
 					}
 					break;
@@ -801,6 +801,7 @@ export class WebGLRenderer {
 					if (offscreen)
 						activeBuffer =
 							offscreenStack.length > 0 ? (offscreenStack[offscreenStack.length - 1] ?? buffer) : buffer;
+					this._applyTransform(activeBuffer, (pop.push as EffectPushInstruction).transform);
 					this._filterPipe.executePop(pop, activeBuffer, offscreen);
 					break;
 				}
@@ -818,7 +819,7 @@ export class WebGLRenderer {
 						const displayBuffer = this._maskPipe.executeClipPush(push, activeBuffer, this);
 						offscreenStack.push(displayBuffer);
 						if (displayBuffer) {
-							this._setOffscreenOrigin(displayBuffer, push.renderable.$getOriginalBounds(), pushT);
+							this._configureOffscreenTransform(displayBuffer, push.renderable.$getOriginalBounds(), pushT);
 							activeBuffer = displayBuffer;
 						}
 					}
@@ -838,6 +839,7 @@ export class WebGLRenderer {
 								offscreenStack.length > 0
 									? (offscreenStack[offscreenStack.length - 1] ?? buffer)
 									: buffer;
+						this._applyTransform(activeBuffer, (pop.push as EffectPushInstruction).transform);
 						this._maskPipe.executeClipPop(pop, activeBuffer, displayBuffer, this);
 					}
 					break;
@@ -852,31 +854,61 @@ export class WebGLRenderer {
 	 */
 	private _applyTransform(buffer: WebGLRenderBuffer, t: TransformState): void {
 		const m = buffer.globalMatrix;
+		const tx = t.tx + t.a * t.offsetX + t.c * t.offsetY;
+		const ty = t.ty + t.b * t.offsetX + t.d * t.offsetY;
+		if (buffer.hasOffscreenTransform) {
+			const inverse = buffer.offscreenInverseTransform;
+			m.a = inverse.a * t.a + inverse.c * t.b;
+			m.b = inverse.b * t.a + inverse.d * t.b;
+			m.c = inverse.a * t.c + inverse.c * t.d;
+			m.d = inverse.b * t.c + inverse.d * t.d;
+			m.tx = inverse.a * tx + inverse.c * ty + inverse.tx + buffer.offscreenLocalX;
+			m.ty = inverse.b * tx + inverse.d * ty + inverse.ty + buffer.offscreenLocalY;
+			buffer.globalAlpha = t.alpha;
+			buffer.globalTintColor = t.tint;
+			return;
+		}
 		m.a = t.a;
 		m.b = t.b;
 		m.c = t.c;
 		m.d = t.d;
-		m.tx = t.tx + t.offsetX - buffer.offscreenOriginX;
-		m.ty = t.ty + t.offsetY - buffer.offscreenOriginY;
+		m.tx = tx - buffer.offscreenOriginX;
+		m.ty = ty - buffer.offscreenOriginY;
 		buffer.globalAlpha = t.alpha;
 		buffer.globalTintColor = t.tint;
 	}
 
 	/**
-	 * Compute the world-space position that should map to (padX, padY) in the
-	 * offscreen buffer.  Because the buffer includes filter padding, the
-	 * content's bounds origin must land at (padX, padY) rather than (0,0).
+	 * Configure conversion from world-space instruction snapshots into the
+	 * effect owner's local offscreen coordinate system. Filter padding shifts
+	 * the content bounds origin from (0,0) to (padX,padY).
 	 */
-	private _setOffscreenOrigin(buf: WebGLRenderBuffer, bounds: Rectangle, t: TransformState): void {
+	private _configureOffscreenTransform(buf: WebGLRenderBuffer, bounds: Rectangle, t: TransformState): void {
 		const padX = buf.filterPadX;
 		const padY = buf.filterPadY;
-		// World position of bounds origin:
-		const worldBX = t.a * bounds.x + t.c * bounds.y + t.tx + t.offsetX;
-		const worldBY = t.b * bounds.x + t.d * bounds.y + t.ty + t.offsetY;
-		// We want: _applyTransform gives globalMatrix.tx = worldBX - originX = padX
-		// So: originX = worldBX - padX
-		buf.offscreenOriginX = worldBX - padX;
-		buf.offscreenOriginY = worldBY - padY;
+		const det = t.a * t.d - t.b * t.c;
+		if (Math.abs(det) <= 1e-12) {
+			const tx = t.tx + t.a * t.offsetX + t.c * t.offsetY;
+			const ty = t.ty + t.b * t.offsetX + t.d * t.offsetY;
+			const worldBX = t.a * bounds.x + t.c * bounds.y + tx;
+			const worldBY = t.b * bounds.x + t.d * bounds.y + ty;
+			buf.offscreenOriginX = worldBX - padX;
+			buf.offscreenOriginY = worldBY - padY;
+			buf.hasOffscreenTransform = false;
+			return;
+		}
+		const inverse = buf.offscreenInverseTransform;
+		inverse.a = t.d / det;
+		inverse.b = -t.b / det;
+		inverse.c = -t.c / det;
+		inverse.d = t.a / det;
+		const tx = t.tx + t.a * t.offsetX + t.c * t.offsetY;
+		const ty = t.ty + t.b * t.offsetX + t.d * t.offsetY;
+		inverse.tx = (t.c * ty - t.d * tx) / det;
+		inverse.ty = (t.b * tx - t.a * ty) / det;
+		buf.offscreenLocalX = padX - bounds.x;
+		buf.offscreenLocalY = padY - bounds.y;
+		buf.hasOffscreenTransform = true;
 	}
 
 	/**

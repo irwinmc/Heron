@@ -138,6 +138,7 @@ export class WebGLVertexArrayObject {
 		meshIndices?: number[],
 		rotated?: boolean,
 		textureId = 0,
+		flipY = false,
 	): void {
 		const alpha = Math.min(buffer.globalAlpha, 1.0);
 		const tint = buffer.globalTintColor;
@@ -177,6 +178,7 @@ export class WebGLVertexArrayObject {
 				meshVertices,
 				meshIndices,
 				rotated,
+				flipY,
 			);
 		} else {
 			this._cacheSingle(
@@ -201,6 +203,7 @@ export class WebGLVertexArrayObject {
 				meshVertices,
 				meshIndices,
 				rotated,
+				flipY,
 			);
 		}
 	}
@@ -227,6 +230,7 @@ export class WebGLVertexArrayObject {
 		meshVertices?: number[],
 		meshIndices?: number[],
 		rotated?: boolean,
+		flipY = false,
 	): void {
 		const f32 = this._float32;
 		const u32 = this._uint32;
@@ -279,6 +283,7 @@ export class WebGLVertexArrayObject {
 				textureSourceWidth,
 				textureSourceHeight,
 				rotated,
+				flipY,
 			);
 		}
 	}
@@ -304,6 +309,7 @@ export class WebGLVertexArrayObject {
 		tw: number,
 		th: number,
 		rotated?: boolean,
+		flipY = false,
 	): void {
 		if (destX !== 0 || destY !== 0) {
 			tx = destX * a + destY * c + tx;
@@ -356,6 +362,10 @@ export class WebGLVertexArrayObject {
 		} else {
 			sw = sourceWidth / tw;
 			sh = sourceHeight / th;
+			if (flipY) {
+				sy += sh;
+				sh = -sh;
+			}
 			f32[idx] = tx;
 			f32[idx + 1] = ty;
 			f32[idx + 2] = sx;
@@ -419,6 +429,7 @@ export class WebGLVertexArrayObject {
 		meshVertices?: number[],
 		meshIndices?: number[],
 		rotated?: boolean,
+		flipY = false,
 	): void {
 		const f32 = this._multiFloat32;
 		const u32 = this._multiUint32;
@@ -473,6 +484,7 @@ export class WebGLVertexArrayObject {
 				tw,
 				th,
 				rotated,
+				flipY,
 			);
 		}
 	}
@@ -499,6 +511,7 @@ export class WebGLVertexArrayObject {
 		tw: number,
 		th: number,
 		rotated?: boolean,
+		flipY = false,
 	): void {
 		if (destX !== 0 || destY !== 0) {
 			tx = destX * a + destY * c + tx;
@@ -555,6 +568,10 @@ export class WebGLVertexArrayObject {
 		} else {
 			sw = sourceWidth / tw;
 			sh = sourceHeight / th;
+			if (flipY) {
+				sy += sh;
+				sh = -sh;
+			}
 			f32[idx] = tx;
 			f32[idx + 1] = ty;
 			f32[idx + 2] = sx;

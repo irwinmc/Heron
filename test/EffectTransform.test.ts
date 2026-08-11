@@ -33,6 +33,12 @@ function mockBuffer(): WebGLRenderBuffer {
 		globalMatrix: new Matrix(),
 		globalAlpha: 1,
 		globalTintColor: 0xffffff,
+		hasOffscreenTransform: false,
+		offscreenOriginX: 0,
+		offscreenOriginY: 0,
+		offscreenInverseTransform: new Matrix(),
+		filterPadX: 0,
+		filterPadY: 0,
 	} as WebGLRenderBuffer;
 }
 
@@ -124,5 +130,67 @@ describe('effect transform partial updates', () => {
 		expect(childTransform.tx).toBeCloseTo(child.$getConcatenatedMatrix().tx);
 		expect(childTransform.d).toBeCloseTo(child.$getConcatenatedMatrix().d);
 		expect(childTransform.alpha).toBeCloseTo(0.7);
+	});
+
+	it('removes the outer effect transform while drawing into an offscreen buffer', () => {
+		const renderer = new WebGLRenderer() as unknown as {
+			_configureOffscreenTransform(buffer: WebGLRenderBuffer, bounds: Rectangle, value: TestTransform): void;
+			_applyTransform(buffer: WebGLRenderBuffer, value: TestTransform): void;
+		};
+		const buffer = mockBuffer();
+		const angle = Math.PI / 6;
+		const effectTransform: TestTransform = {
+			a: Math.cos(angle),
+			b: Math.sin(angle),
+			c: -Math.sin(angle),
+			d: Math.cos(angle),
+			tx: 400,
+			ty: 250,
+			offsetX: 0,
+			offsetY: 0,
+			alpha: 1,
+			tint: 0xffffff,
+		};
+
+		renderer._configureOffscreenTransform(buffer, new Rectangle(0, 0, 80, 80), effectTransform);
+		renderer._applyTransform(buffer, effectTransform);
+
+		expect(buffer.globalMatrix.a).toBeCloseTo(1);
+		expect(buffer.globalMatrix.b).toBeCloseTo(0);
+		expect(buffer.globalMatrix.c).toBeCloseTo(0);
+		expect(buffer.globalMatrix.d).toBeCloseTo(1);
+		expect(buffer.globalMatrix.tx).toBeCloseTo(0);
+		expect(buffer.globalMatrix.ty).toBeCloseTo(0);
+	});
+
+	it('applies local instruction offsets through rotation and scale', () => {
+		const renderer = new WebGLRenderer() as unknown as {
+			_applyTransform(buffer: WebGLRenderBuffer, value: TestTransform): void;
+		};
+		const target = mockBuffer();
+		const angle = Math.PI / 6;
+		const a = Math.cos(angle) * 1.5;
+		const b = Math.sin(angle) * 1.5;
+		const c = -Math.sin(angle) * 0.75;
+		const d = Math.cos(angle) * 0.75;
+		const value: TestTransform = {
+			a,
+			b,
+			c,
+			d,
+			tx: 440,
+			ty: 290,
+			offsetX: -40,
+			offsetY: -40,
+			alpha: 1,
+			tint: 0xffffff,
+		};
+
+		renderer._applyTransform(target, value);
+
+		expect(target.globalMatrix.tx).toBeCloseTo(440 - a * 40 - c * 40);
+		expect(target.globalMatrix.ty).toBeCloseTo(290 - b * 40 - d * 40);
+		expect(target.globalMatrix.a * 40 + target.globalMatrix.c * 40 + target.globalMatrix.tx).toBeCloseTo(440);
+		expect(target.globalMatrix.b * 40 + target.globalMatrix.d * 40 + target.globalMatrix.ty).toBeCloseTo(290);
 	});
 });
